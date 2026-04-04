@@ -1,4 +1,7 @@
-import Disconnect from 'disconnect';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const DiscogsClient = require('disconnect').Client;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const DiscogsOAuth = require('disconnect/lib/oauth');
 import { env } from '../config/env';
 
 interface DiscogsAuth {
@@ -49,7 +52,7 @@ export function consumePendingTokenSecret(requestToken: string): string | null {
 
 export function getRequestToken(callbackUrl: string): Promise<RequestTokenResult> {
   return new Promise((resolve, reject) => {
-    const oauth = new Disconnect.OAuth();
+    const oauth = new DiscogsOAuth();
     oauth.getRequestToken(
       env.DISCOGS_CONSUMER_KEY,
       env.DISCOGS_CONSUMER_SECRET,
@@ -75,7 +78,7 @@ export function getAccessToken(
   verifier: string,
 ): Promise<AccessTokenResult> {
   return new Promise((resolve, reject) => {
-    const oauth = new Disconnect.OAuth({
+    const oauth = new DiscogsOAuth({
       method: 'oauth',
       level: 1,
       consumerKey: env.DISCOGS_CONSUMER_KEY,
@@ -97,7 +100,7 @@ export function getAccessToken(
 }
 
 export function getDiscogsClient(accessToken: string, accessTokenSecret: string) {
-  return new Disconnect.Client({
+  return new DiscogsClient({
     method: 'oauth',
     level: 2,
     consumerKey: env.DISCOGS_CONSUMER_KEY,
@@ -108,7 +111,7 @@ export function getDiscogsClient(accessToken: string, accessTokenSecret: string)
 }
 
 export function getDiscogsClientAppLevel() {
-  return new Disconnect.Client({
+  return new DiscogsClient({
     method: 'discogs',
     consumerKey: env.DISCOGS_CONSUMER_KEY,
     consumerSecret: env.DISCOGS_CONSUMER_SECRET,

@@ -1,3 +1,32 @@
+declare module 'disconnect/lib/oauth' {
+  interface OAuthAuth {
+    method?: string;
+    level?: number;
+    consumerKey?: string;
+    consumerSecret?: string;
+    token?: string;
+    tokenSecret?: string;
+    authorizeUrl?: string;
+    family?: string;
+  }
+
+  type OAuthCallback = (err: Error | null, auth: OAuthAuth) => void;
+
+  class DiscogsOAuth {
+    constructor(auth?: Partial<OAuthAuth>);
+    getRequestToken(
+      consumerKey: string,
+      consumerSecret: string,
+      callbackUrl: string,
+      callback: OAuthCallback,
+    ): this;
+    getAccessToken(verifier: string, callback: OAuthCallback): this;
+    export(): OAuthAuth;
+  }
+
+  export = DiscogsOAuth;
+}
+
 declare module 'disconnect' {
   interface OAuthAuth {
     method: string;
