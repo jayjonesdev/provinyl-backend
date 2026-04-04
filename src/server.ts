@@ -2,6 +2,7 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import mongoose from 'mongoose';
 import { env } from './config/env';
 import logger from './utils/logger';
 import router from './routes';
@@ -32,8 +33,20 @@ app.use('/api/v1', router);
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
 
-app.listen(env.PORT, () => {
-  logger.info(`provinyl-backend running on port ${env.PORT} [${env.NODE_ENV}]`);
-});
+async function start() {
+  try {
+    await mongoose.connect(env.MONGO_URI);
+    logger.info('MongoDB connected');
+
+    app.listen(env.PORT, () => {
+      logger.info(`provinyl-backend running on port ${env.PORT} [${env.NODE_ENV}]`);
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to start server');
+    process.exit(1);
+  }
+}
+
+start();
 
 export default app;
