@@ -4,6 +4,32 @@ import { createUserClient, createAppClient } from '../services/discogsService';
 import { normalizeCollectionItem, normalizePagination } from '../utils/normalize';
 import logger from '../utils/logger';
 
+// POST /api/v1/collection/:username  body: { release_id }
+export async function addToCollection(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { username } = req.params as { username: string };
+
+    if (req.user?.username !== username) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const releaseId = parseInt(req.body['release_id'], 10);
+    if (isNaN(releaseId)) {
+      res.status(400).json({ error: 'Invalid release_id' });
+      return;
+    }
+
+    const client = createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret);
+    const result = await client.addToCollection(username, releaseId);
+
+    res.status(201).json(result);
+  } catch (err) {
+    logger.error({ err }, 'Failed to add to collection');
+    res.status(502).json({ error: 'Failed to add to collection' });
+  }
+}
+
 // GET /api/v1/collection/:username?page=1&per_page=100
 export async function getCollection(req: AuthRequest, res: Response): Promise<void> {
   try {
