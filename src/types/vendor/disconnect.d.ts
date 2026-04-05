@@ -62,62 +62,51 @@ declare module 'disconnect' {
     tokenSecret?: string;
   }
 
+  type Callback = (err: Error | null, data: unknown) => void;
+
   class Client {
     constructor(auth?: ClientAuth);
     database(): Database;
     user(): UserResource;
+    get(path: string, callback: Callback): void;
   }
 
   interface Database {
-    search(
-      options: Record<string, string | number>,
-      callback: (err: Error | null, data: unknown) => void,
-    ): void;
-    getRelease(
-      releaseId: number,
-      callback: (err: Error | null, data: unknown) => void,
-    ): void;
+    search(options: Record<string, string | number>, callback: Callback): void;
+    getRelease(releaseId: number, callback: Callback): void;
   }
 
-  interface UserResource {
-    getCollection(
+  // client.user().collection() — disconnect/lib/collection.js
+  interface CollectionResource {
+    getReleases(
       username: string,
       folderId: number,
-      options: Record<string, string | number>,
-      callback: (err: Error | null, data: unknown) => void,
+      params: Record<string, string | number>,
+      callback: Callback,
     ): void;
-    getWantlist(
-      username: string,
-      options: Record<string, string | number>,
-      callback: (err: Error | null, data: unknown) => void,
-    ): void;
-    getCollectionValue(
-      username: string,
-      callback: (err: Error | null, data: unknown) => void,
-    ): void;
-    addToCollection(
-      username: string,
-      folderId: number,
-      releaseId: number,
-      callback: (err: Error | null, data: unknown) => void,
-    ): void;
-    removeFromCollection(
+    getReleases(username: string, folderId: number, callback: Callback): void;
+    addRelease(username: string, folderId: number, releaseId: number, callback: Callback): void;
+    removeRelease(
       username: string,
       folderId: number,
       releaseId: number,
       instanceId: number,
-      callback: (err: Error | null, data: unknown) => void,
+      callback: Callback,
     ): void;
-    addToWantlist(
-      username: string,
-      releaseId: number,
-      callback: (err: Error | null, data: unknown) => void,
-    ): void;
-    removeFromWantlist(
-      username: string,
-      releaseId: number,
-      callback: (err: Error | null, data: unknown) => void,
-    ): void;
+  }
+
+  // client.user().wantlist() — disconnect/lib/wantlist.js
+  interface WantlistResource {
+    getReleases(username: string, params: Record<string, string | number>, callback: Callback): void;
+    getReleases(username: string, callback: Callback): void;
+    addRelease(username: string, releaseId: number, callback: Callback): void;
+    removeRelease(username: string, releaseId: number, callback: Callback): void;
+  }
+
+  // client.user() — disconnect/lib/user.js
+  interface UserResource {
+    collection(): CollectionResource;
+    wantlist(): WantlistResource;
   }
 
   export { OAuth, Client };

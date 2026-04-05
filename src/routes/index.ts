@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { login, callback, me, refresh, logout } from '../handlers/authHandler';
+import { getCollection } from '../handlers/collectionHandler';
 import { requireAuth } from '../middleware/authMiddleware';
 
 const router: Router = Router();
@@ -16,6 +17,7 @@ router.get('/auth/me', requireAuth, me);
 router.post('/auth/refresh', refresh);
 router.post('/auth/logout', logout);
 
-// Phase 3+: collection, wantlist, release, search routes mounted here
+// Collection
+router.get('/collection/:username', requireAuth, getCollection);
 
 export default router;
