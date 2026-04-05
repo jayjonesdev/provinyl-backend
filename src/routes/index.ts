@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { login, callback, me, refresh, logout } from '../handlers/authHandler';
-import { getCollection } from '../handlers/collectionHandler';
+import { getCollection, addToCollection } from '../handlers/collectionHandler';
 import { getRelease } from '../handlers/releaseHandler';
+import { search } from '../handlers/searchHandler';
 import { requireAuth } from '../middleware/authMiddleware';
 
 const router: Router = Router();
@@ -20,8 +21,12 @@ router.post('/auth/logout', logout);
 
 // Collection
 router.get('/collection/:username', requireAuth, getCollection);
+router.post('/collection/:username', requireAuth, addToCollection);
 
 // Release detail — no auth required (uses app-level credentials)
 router.get('/release/:id', getRelease);
+
+// Search
+router.get('/search', requireAuth, search);
 
 export default router;
