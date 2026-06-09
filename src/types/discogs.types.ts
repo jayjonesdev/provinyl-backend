@@ -102,6 +102,12 @@ export interface DiscogsWantlistResponse {
   pagination: DiscogsPagination;
 }
 
+export interface DiscogsCommunity {
+  have: number;
+  want: number;
+  rating: { count: number; average: number };
+}
+
 export interface DiscogsRelease {
   id: number;
   title: string;
@@ -117,6 +123,11 @@ export interface DiscogsRelease {
   tracklist: DiscogsTrack[];
   videos: DiscogsVideo[];
   uri: string;
+  // Present on the release-detail endpoint (not in collection/wantlist lists):
+  extraartists?: DiscogsArtist[];
+  community?: DiscogsCommunity;
+  lowest_price?: number | null;
+  num_for_sale?: number;
 }
 
 export interface DiscogsSearchResult {

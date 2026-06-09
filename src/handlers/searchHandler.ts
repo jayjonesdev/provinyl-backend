@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { createUserClient, createAppClient } from '../services/discogsService';
-import { normalizeSearchResult, normalizePagination } from '../utils/normalize';
+import { searchResultToRelease, mapPagination } from '../utils/toRelease';
 import logger from '../utils/logger';
 
 // Search type → Discogs params mapping
@@ -68,9 +68,9 @@ export async function search(req: AuthRequest, res: Response): Promise<void> {
 
     res.json({
       results: (data.results ?? []).map((r) =>
-        normalizeSearchResult(r, wantlistIds.has(r.id)),
+        searchResultToRelease(r, wantlistIds.has(r.id)),
       ),
-      pagination: normalizePagination(data.pagination),
+      pagination: mapPagination(data.pagination),
     });
   } catch (err) {
     logger.error({ err }, 'Search failed');
