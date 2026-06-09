@@ -156,3 +156,29 @@ export interface DiscogsCollectionValue {
   median: string;
   maximum: string;
 }
+
+export interface DiscogsIdentity {
+  id: number;
+  username: string;
+  resource_url: string;
+  consumer_name: string;
+}
+
+export interface DiscogsProfile {
+  id: number;
+  username: string;
+  avatar_url: string;
+  resource_url: string;
+}
+
+/** A single owned copy of a release in the user's collection. */
+export interface DiscogsCollectionInstance {
+  id: number;
+  instance_id: number;
+  folder_id: number;
+}
+
+/** GET /users/{username}/collection/releases/{release_id} */
+export interface DiscogsReleaseInstancesResponse {
+  releases: DiscogsCollectionInstance[];
+}

@@ -16,9 +16,9 @@ import {
   REFRESH_COOKIE,
 } from '../auth/cookies';
 import { encrypt } from '../utils/crypto';
+import { createUserClient } from '../services/discogsService';
 import { User } from '../models/User';
 import { AuthRequest } from '../types';
-import axios from 'axios';
 
 // ─── GET /api/v1/auth/login ───────────────────────────────────────────────────
 export async function login(_req: Request, res: Response): Promise<void> {
@@ -54,18 +54,12 @@ export async function callback(req: Request, res: Response): Promise<void> {
     const { accessToken: discogsToken, accessTokenSecret: discogsTokenSecret } =
       await getAccessToken(oauth_token, requestTokenSecret, oauth_verifier);
 
-    // Fetch Discogs identity to get username + avatar
-    const identityRes = await axios.get<{ username: string; avatar_url: string }>(
-      'https://api.discogs.com/oauth/identity',
-      {
-        headers: {
-          Authorization: buildDiscogsAuthHeader(oauth_token, discogsToken, discogsTokenSecret),
-          'User-Agent': 'ProVinyl/1.0',
-        },
-      },
-    );
-
-    const { username, avatar_url } = identityRes.data;
+    // Identity (username) + profile (avatar) via the authenticated Discogs client.
+    const discogsClient = createUserClient(discogsToken, discogsTokenSecret);
+    const identity = await discogsClient.getIdentity();
+    const profile = await discogsClient.getProfile(identity.username);
+    const username = identity.username;
+    const avatar_url = profile.avatar_url ?? '';
 
     // Upsert user
     const user = await User.findOneAndUpdate(
@@ -209,22 +203,3 @@ function extractFamily(refreshToken: string): string {
   }
 }
 
-function buildDiscogsAuthHeader(
-  _requestToken: string,
-  accessToken: string,
-  accessTokenSecret: string,
-): string {
-  // Use the access token to build the OAuth Authorization header for identity call
-  const key = `${env.DISCOGS_CONSUMER_KEY}`;
-  const secret = `${env.DISCOGS_CONSUMER_SECRET}&${accessTokenSecret}`;
-  const nonce = Math.random().toString(36).substring(2);
-  const timestamp = Math.floor(Date.now() / 1000);
-  return (
-    `OAuth oauth_consumer_key="${key}",` +
-    `oauth_token="${accessToken}",` +
-    `oauth_signature_method="PLAINTEXT",` +
-    `oauth_signature="${secret}",` +
-    `oauth_timestamp="${timestamp}",` +
-    `oauth_nonce="${nonce}"`
-  );
-}
