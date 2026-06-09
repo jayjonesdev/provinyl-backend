@@ -7,6 +7,7 @@ import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from
 import { requireAuth } from '../middleware/authMiddleware';
 import { validate } from '../middleware/validate';
 import { ensureCsrfCookie } from '../auth/cookies';
+import { VERSION } from '../version';
 import {
   callbackQuery,
   usernameParams,
@@ -21,7 +22,7 @@ const router: Router = Router();
 
 // Health check
 router.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({ status: 'ok', version: VERSION, uptime: process.uptime(), timestamp: Date.now() });
 });
 
 // CSRF bootstrap — SPA calls this once to obtain the double-submit token.

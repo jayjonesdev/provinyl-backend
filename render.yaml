@@ -17,6 +17,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: LOG_LEVEL
+        value: info
       # Render injects PORT automatically; the app reads it.
       - key: JWT_ACCESS_EXPIRY
         value: 15m
