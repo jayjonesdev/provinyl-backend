@@ -1,0 +1,15 @@
+# Local development dependencies. Run `docker compose up -d` to start MongoDB,
+# then `pnpm dev` against MONGO_URI=mongodb://localhost:27017/provinyl.
+# (The API container itself is added in the deploy phase.)
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - provinyl-mongo:/data/db
+
+volumes:
+  provinyl-mongo:
