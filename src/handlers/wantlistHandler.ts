@@ -4,22 +4,19 @@ import { createUserClientFor } from '../services/discogsService';
 import { wantlistItemToRelease, releaseToRelease } from '../utils/toRelease';
 import logger from '../utils/logger';
 
-// GET /api/v1/wantlist/:username?page=1&per_page=100 → Release[]
+// GET /api/v1/wantlist/:username → Release[] (all pages, aggregated server-side)
 export async function getWantlist(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { username } = req.params as { username: string };
-    const page = parseInt((req.query['page'] as string) ?? '1', 10);
-    const perPage = Math.min(parseInt((req.query['per_page'] as string) ?? '100', 10), 100);
 
     if (req.user?.username !== username) {
       res.status(403).json({ error: 'Forbidden' });
       return;
     }
 
-    const client = createUserClientFor(req.user);
-    const data = await client.getWantlist(username, page, perPage);
+    const wants = await createUserClientFor(req.user).getAllWantlist(username);
 
-    res.json((data.wants ?? []).map(wantlistItemToRelease));
+    res.json(wants.map(wantlistItemToRelease));
   } catch (err) {
     logger.error({ err }, 'Failed to fetch wantlist');
     res.status(502).json({ error: 'Failed to fetch wantlist from Discogs' });

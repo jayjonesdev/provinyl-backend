@@ -66,8 +66,10 @@ declare module 'disconnect' {
 
   class Client {
     constructor(auth?: ClientAuth);
+    constructor(userAgent: string, auth?: ClientAuth);
     database(): Database;
     user(): UserResource;
+    getIdentity(callback: Callback): void;
     get(path: string, callback: Callback): void;
   }
 
@@ -107,6 +109,7 @@ declare module 'disconnect' {
   interface UserResource {
     collection(): CollectionResource;
     wantlist(): WantlistResource;
+    getProfile(username: string, callback: Callback): void;
   }
 
   export { OAuth, Client };

@@ -219,8 +219,14 @@ Backend-driven, minimal:
    `requireAuth` reads the access cookie (Bearer fallback); double-submit CSRF
    (`middleware/csrfMiddleware.ts` + `/auth/csrf`); `TOKEN_ENC_KEY` env. 10 new
    tests; typecheck/build/lint green. *(auth)*
-3. **Discogs resilience** — 429 backoff + concurrency cap + cache; all-pages
-   aggregation; `getIdentity()`; server-side `instance_id` resolution. *(reliability)*
+3. **Discogs resilience** ✅ **done** — `services/discogsResilience.ts`
+   (concurrency cap + 429/Retry-After backoff); `utils/cache.ts` TTL cache on
+   release detail (1h) + search (5m); all-pages aggregation for
+   collection/wantlist (parallel, capped, warn-logged); `getIdentity()` +
+   `getProfile()` replace the hand-rolled OAuth header (axios dropped);
+   `removeFromCollection` resolves instance + folder server-side (fixes the
+   folder-0 bug; DELETE needs no body); User-Agent on all Discogs clients. 10 new
+   tests (45 total); typecheck/build/lint green. *(reliability)*
 4. **Validation & errors** — `zod` request schemas + `validate` middleware;
    consistent error envelope; structured logs. *(hardening)*
 5. **Tests & CI** — vitest + supertest coverage; GitHub Actions (lint/typecheck/

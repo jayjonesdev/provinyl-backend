@@ -4,6 +4,9 @@ const DiscogsClient = require('disconnect').Client;
 const DiscogsOAuth = require('disconnect/lib/oauth');
 import { env } from '../config/env';
 
+// Discogs asks every client to identify itself with a descriptive User-Agent.
+export const USER_AGENT = 'ProVinyl/1.0 +https://github.com/jayjonesdev/provinyl-backend';
+
 interface DiscogsAuth {
   method: string;
   level: number;
@@ -100,7 +103,7 @@ export function getAccessToken(
 }
 
 export function getDiscogsClient(accessToken: string, accessTokenSecret: string) {
-  return new DiscogsClient({
+  return new DiscogsClient(USER_AGENT, {
     method: 'oauth',
     level: 2,
     consumerKey: env.DISCOGS_CONSUMER_KEY,
@@ -111,7 +114,7 @@ export function getDiscogsClient(accessToken: string, accessTokenSecret: string)
 }
 
 export function getDiscogsClientAppLevel() {
-  return new DiscogsClient({
+  return new DiscogsClient(USER_AGENT, {
     method: 'discogs',
     consumerKey: env.DISCOGS_CONSUMER_KEY,
     consumerSecret: env.DISCOGS_CONSUMER_SECRET,

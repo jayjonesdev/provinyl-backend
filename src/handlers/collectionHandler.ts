@@ -4,27 +4,18 @@ import { createUserClientFor, createAppClient } from '../services/discogsService
 import { collectionItemToRelease, releaseToRelease } from '../utils/toRelease';
 import logger from '../utils/logger';
 
-// GET /api/v1/collection/:username?page=1&per_page=100 → Release[]
-// (Single page for now; Phase 3 aggregates all pages server-side.)
+// GET /api/v1/collection/:username → Release[] (all pages, aggregated server-side)
 export async function getCollection(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { username } = req.params as { username: string };
-    const page = parseInt((req.query['page'] as string) ?? '1', 10);
-    const perPage = Math.min(parseInt((req.query['per_page'] as string) ?? '100', 10), 100);
-
     const isOwner = req.user?.username === username;
 
-    let data;
-    if (isOwner && req.user) {
-      const client = createUserClientFor(req.user);
-      data = await client.getCollection(username, page, perPage);
-    } else {
-      // Public collection — use app-level credentials.
-      const client = createAppClient();
-      data = await client.getPublicCollection(username, page, perPage);
-    }
+    const releases =
+      isOwner && req.user
+        ? await createUserClientFor(req.user).getAllCollection(username)
+        : await createAppClient().getAllPublicCollection(username); // public — app-level creds
 
-    res.json((data.releases ?? []).map(collectionItemToRelease));
+    res.json(releases.map(collectionItemToRelease));
   } catch (err) {
     logger.error({ err }, 'Failed to fetch collection');
     res.status(502).json({ error: 'Failed to fetch collection from Discogs' });
@@ -58,7 +49,9 @@ export async function addToCollection(req: AuthRequest, res: Response): Promise<
   }
 }
 
-// DELETE /api/v1/collection/:username/:releaseId  body: { instance_id }
+// DELETE /api/v1/collection/:username/:releaseId
+// Resolves the instance(s) + folder server-side, so the client only sends the
+// release id (no body). Removes every owned copy of that release.
 export async function removeFromCollection(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { username, releaseId: releaseIdParam } = req.params as { username: string; releaseId: string };
@@ -69,15 +62,22 @@ export async function removeFromCollection(req: AuthRequest, res: Response): Pro
     }
 
     const releaseId = parseInt(releaseIdParam, 10);
-    const instanceId = parseInt(req.body['instance_id'], 10);
-
-    if (isNaN(releaseId) || isNaN(instanceId)) {
-      res.status(400).json({ error: 'Invalid release_id or instance_id' });
+    if (isNaN(releaseId)) {
+      res.status(400).json({ error: 'Invalid release_id' });
       return;
     }
 
     const client = createUserClientFor(req.user);
-    await client.removeFromCollection(username, releaseId, instanceId);
+    const { releases: instances } = await client.getReleaseInstances(username, releaseId);
+
+    if (!instances || instances.length === 0) {
+      res.status(404).json({ error: 'Release not in collection' });
+      return;
+    }
+
+    for (const inst of instances) {
+      await client.removeFromCollection(username, releaseId, inst.instance_id, inst.folder_id);
+    }
 
     res.status(204).send();
   } catch (err) {
