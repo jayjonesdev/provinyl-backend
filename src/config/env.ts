@@ -14,6 +14,11 @@ const envSchema = z.object({
   DISCOGS_CONSUMER_SECRET: z.string().min(1, 'DISCOGS_CONSUMER_SECRET is required'),
   DISCOGS_CALLBACK_URL: z.string().url('DISCOGS_CALLBACK_URL must be a valid URL'),
   CLIENT_ORIGIN: z.string().url('CLIENT_ORIGIN must be a valid URL'),
+  // 32-byte key (64 hex chars) for AES-256-GCM encryption of Discogs tokens at
+  // rest. Generate with: openssl rand -hex 32
+  TOKEN_ENC_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'TOKEN_ENC_KEY must be 64 hex characters (32 bytes)'),
 });
 
 const parsed = envSchema.safeParse(process.env);

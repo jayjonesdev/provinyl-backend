@@ -1,4 +1,5 @@
 import { getDiscogsClient, getDiscogsClientAppLevel } from '../auth/discogsOAuth';
+import { decrypt } from '../utils/crypto';
 import {
   DiscogsCollectionResponse,
   DiscogsWantlistResponse,
@@ -6,6 +7,7 @@ import {
   DiscogsSearchResponse,
   DiscogsCollectionValue,
 } from '../types/discogs.types';
+import type { IUser } from '../types';
 
 function promisify<T>(fn: (cb: (err: Error | null, data: T) => void) => void): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -14,6 +16,11 @@ function promisify<T>(fn: (cb: (err: Error | null, data: T) => void) => void): P
       resolve(data);
     });
   });
+}
+
+/** Build a per-user Discogs client from a stored user, decrypting their OAuth tokens. */
+export function createUserClientFor(user: IUser) {
+  return createUserClient(decrypt(user.discogsAccessToken), decrypt(user.discogsAccessTokenSecret));
 }
 
 export function createUserClient(accessToken: string, accessTokenSecret: string) {

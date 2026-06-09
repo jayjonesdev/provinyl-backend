@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
-import { createUserClient } from '../services/discogsService';
+import { createUserClientFor } from '../services/discogsService';
 import { wantlistItemToRelease, releaseToRelease } from '../utils/toRelease';
 import logger from '../utils/logger';
 
@@ -16,7 +16,7 @@ export async function getWantlist(req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const client = createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret);
+    const client = createUserClientFor(req.user);
     const data = await client.getWantlist(username, page, perPage);
 
     res.json((data.wants ?? []).map(wantlistItemToRelease));
@@ -42,7 +42,7 @@ export async function addToWantlist(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const client = createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret);
+    const client = createUserClientFor(req.user);
     await client.addToWantlist(username, releaseId);
     const detail = await client.getRelease(releaseId);
 
@@ -69,7 +69,7 @@ export async function removeFromWantlist(req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const client = createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret);
+    const client = createUserClientFor(req.user);
     await client.removeFromWantlist(username, releaseId);
 
     res.status(204).send();
@@ -95,7 +95,7 @@ export async function moveToCollection(req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const client = createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret);
+    const client = createUserClientFor(req.user);
 
     // Add to collection first, then remove from wantlist.
     const addResult = (await client.addToCollection(username, releaseId)) as { instance_id?: number };
