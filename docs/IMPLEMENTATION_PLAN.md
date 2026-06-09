@@ -235,8 +235,12 @@ Backend-driven, minimal:
    (`ApiError` + `fail`); error/not-found/auth/csrf middleware + handlers all use
    it. Structured request logs via `pino-http` (morgan dropped). 8 new tests
    (53 total); typecheck/build/lint green. *(hardening)*
-5. **Tests & CI** — vitest + supertest coverage; GitHub Actions (lint/typecheck/
-   test); docker-compose for local mongo. *(quality)*
+5. **Tests & CI** ✅ **done** — split `app.ts` (createApp, no side effects) from
+   `server.ts`; `api.test.ts` supertest integration suite (health, 404, auth
+   401, CSRF 403, ownership 403, validation 400, collection GET/POST/DELETE,
+   refresh rotation + reuse) with the data layer mocked and jwt/middleware real;
+   GitHub Actions `ci.yml` (lint/typecheck/test/build); `docker-compose.yml`
+   (mongo). 66 tests total; all green. *(quality)*
 6. **Deploy** — multi-stage Dockerfile, healthcheck, env docs, target wiring
    (TBD — see open questions). *(ship)*
 
