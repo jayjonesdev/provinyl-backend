@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import jwtService from '../auth/jwtService';
 import { ACCESS_COOKIE } from '../auth/cookies';
+import { fail } from '../utils/httpError';
 import { User } from '../models/User';
 import { AuthRequest } from '../types';
 
@@ -25,20 +26,20 @@ export async function requireAuth(
   try {
     const token = extractAccessToken(req);
     if (!token) {
-      res.status(401).json({ error: 'Authentication required' });
+      fail(res, 401, 'unauthorized', 'Authentication required');
       return;
     }
 
     const claims = jwtService.validateToken(token);
 
     if (claims.token_type !== 'access') {
-      res.status(401).json({ error: 'Invalid token type' });
+      fail(res, 401, 'invalid_token', 'Invalid token type');
       return;
     }
 
     const user = await User.findById(claims.user_id);
     if (!user || !user.isActive) {
-      res.status(401).json({ error: 'User not found' });
+      fail(res, 401, 'unauthorized', 'User not found');
       return;
     }
 
@@ -47,6 +48,6 @@ export async function requireAuth(
 
     next();
   } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    fail(res, 401, 'invalid_token', 'Invalid or expired token');
   }
 }

@@ -227,8 +227,14 @@ Backend-driven, minimal:
    `removeFromCollection` resolves instance + folder server-side (fixes the
    folder-0 bug; DELETE needs no body); User-Agent on all Discogs clients. 10 new
    tests (45 total); typecheck/build/lint green. *(reliability)*
-4. **Validation & errors** — `zod` request schemas + `validate` middleware;
-   consistent error envelope; structured logs. *(hardening)*
+4. **Validation & errors** ✅ **done** — `validators.ts` (zod params/query/body,
+   coercing numbers) + `middleware/validate.ts` (populates `req.valid`, 400s via
+   the envelope); handlers read typed input from `req.valid` (manual
+   parseInt/isNaN gone). Consistent error envelope
+   `{ error: { code, message, details? } }` via `utils/httpError.ts`
+   (`ApiError` + `fail`); error/not-found/auth/csrf middleware + handlers all use
+   it. Structured request logs via `pino-http` (morgan dropped). 8 new tests
+   (53 total); typecheck/build/lint green. *(hardening)*
 5. **Tests & CI** — vitest + supertest coverage; GitHub Actions (lint/typecheck/
    test); docker-compose for local mongo. *(quality)*
 6. **Deploy** — multi-stage Dockerfile, healthcheck, env docs, target wiring

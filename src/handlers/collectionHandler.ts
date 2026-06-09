@@ -2,12 +2,14 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { createUserClientFor, createAppClient } from '../services/discogsService';
 import { collectionItemToRelease, releaseToRelease } from '../utils/toRelease';
+import { fail } from '../utils/httpError';
 import logger from '../utils/logger';
+import type { UsernameParams, ReleaseBody, UsernameReleaseParams } from '../validators';
 
 // GET /api/v1/collection/:username → Release[] (all pages, aggregated server-side)
 export async function getCollection(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { username } = req.params as { username: string };
+    const { username } = req.valid!.params as UsernameParams;
     const isOwner = req.user?.username === username;
 
     const releases =
@@ -18,23 +20,18 @@ export async function getCollection(req: AuthRequest, res: Response): Promise<vo
     res.json(releases.map(collectionItemToRelease));
   } catch (err) {
     logger.error({ err }, 'Failed to fetch collection');
-    res.status(502).json({ error: 'Failed to fetch collection from Discogs' });
+    fail(res, 502, 'discogs_error', 'Failed to fetch collection from Discogs');
   }
 }
 
 // POST /api/v1/collection/:username  body: { releaseId } → Release
 export async function addToCollection(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { username } = req.params as { username: string };
+    const { username } = req.valid!.params as UsernameParams;
+    const { releaseId } = req.valid!.body as ReleaseBody;
 
     if (req.user?.username !== username) {
-      res.status(403).json({ error: 'Forbidden' });
-      return;
-    }
-
-    const releaseId = parseInt(req.body['releaseId'], 10);
-    if (isNaN(releaseId)) {
-      res.status(400).json({ error: 'Invalid releaseId' });
+      fail(res, 403, 'forbidden', 'Forbidden');
       return;
     }
 
@@ -45,7 +42,7 @@ export async function addToCollection(req: AuthRequest, res: Response): Promise<
     res.status(201).json({ ...releaseToRelease(detail, 'collection'), instanceId: addResult.instance_id });
   } catch (err) {
     logger.error({ err }, 'Failed to add to collection');
-    res.status(502).json({ error: 'Failed to add to collection' });
+    fail(res, 502, 'discogs_error', 'Failed to add to collection');
   }
 }
 
@@ -54,16 +51,10 @@ export async function addToCollection(req: AuthRequest, res: Response): Promise<
 // release id (no body). Removes every owned copy of that release.
 export async function removeFromCollection(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { username, releaseId: releaseIdParam } = req.params as { username: string; releaseId: string };
+    const { username, releaseId } = req.valid!.params as UsernameReleaseParams;
 
     if (req.user?.username !== username) {
-      res.status(403).json({ error: 'Forbidden' });
-      return;
-    }
-
-    const releaseId = parseInt(releaseIdParam, 10);
-    if (isNaN(releaseId)) {
-      res.status(400).json({ error: 'Invalid release_id' });
+      fail(res, 403, 'forbidden', 'Forbidden');
       return;
     }
 
@@ -71,7 +62,7 @@ export async function removeFromCollection(req: AuthRequest, res: Response): Pro
     const { releases: instances } = await client.getReleaseInstances(username, releaseId);
 
     if (!instances || instances.length === 0) {
-      res.status(404).json({ error: 'Release not in collection' });
+      fail(res, 404, 'not_found', 'Release not in collection');
       return;
     }
 
@@ -82,6 +73,6 @@ export async function removeFromCollection(req: AuthRequest, res: Response): Pro
     res.status(204).send();
   } catch (err) {
     logger.error({ err }, 'Failed to remove from collection');
-    res.status(502).json({ error: 'Failed to remove from collection' });
+    fail(res, 502, 'discogs_error', 'Failed to remove from collection');
   }
 }

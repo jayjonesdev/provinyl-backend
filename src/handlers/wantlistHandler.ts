@@ -2,15 +2,17 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { createUserClientFor } from '../services/discogsService';
 import { wantlistItemToRelease, releaseToRelease } from '../utils/toRelease';
+import { fail } from '../utils/httpError';
 import logger from '../utils/logger';
+import type { UsernameParams, ReleaseBody, UsernameReleaseParams } from '../validators';
 
 // GET /api/v1/wantlist/:username → Release[] (all pages, aggregated server-side)
 export async function getWantlist(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { username } = req.params as { username: string };
+    const { username } = req.valid!.params as UsernameParams;
 
     if (req.user?.username !== username) {
-      res.status(403).json({ error: 'Forbidden' });
+      fail(res, 403, 'forbidden', 'Forbidden');
       return;
     }
 
@@ -19,23 +21,18 @@ export async function getWantlist(req: AuthRequest, res: Response): Promise<void
     res.json(wants.map(wantlistItemToRelease));
   } catch (err) {
     logger.error({ err }, 'Failed to fetch wantlist');
-    res.status(502).json({ error: 'Failed to fetch wantlist from Discogs' });
+    fail(res, 502, 'discogs_error', 'Failed to fetch wantlist from Discogs');
   }
 }
 
 // POST /api/v1/wantlist/:username  body: { releaseId } → Release
 export async function addToWantlist(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { username } = req.params as { username: string };
+    const { username } = req.valid!.params as UsernameParams;
+    const { releaseId } = req.valid!.body as ReleaseBody;
 
     if (req.user?.username !== username) {
-      res.status(403).json({ error: 'Forbidden' });
-      return;
-    }
-
-    const releaseId = parseInt(req.body['releaseId'], 10);
-    if (isNaN(releaseId)) {
-      res.status(400).json({ error: 'Invalid releaseId' });
+      fail(res, 403, 'forbidden', 'Forbidden');
       return;
     }
 
@@ -46,23 +43,17 @@ export async function addToWantlist(req: AuthRequest, res: Response): Promise<vo
     res.status(201).json(releaseToRelease(detail, 'wantlist'));
   } catch (err) {
     logger.error({ err }, 'Failed to add to wantlist');
-    res.status(502).json({ error: 'Failed to add to wantlist' });
+    fail(res, 502, 'discogs_error', 'Failed to add to wantlist');
   }
 }
 
 // DELETE /api/v1/wantlist/:username/:releaseId
 export async function removeFromWantlist(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { username, releaseId: releaseIdParam } = req.params as { username: string; releaseId: string };
+    const { username, releaseId } = req.valid!.params as UsernameReleaseParams;
 
     if (req.user?.username !== username) {
-      res.status(403).json({ error: 'Forbidden' });
-      return;
-    }
-
-    const releaseId = parseInt(releaseIdParam, 10);
-    if (isNaN(releaseId)) {
-      res.status(400).json({ error: 'Invalid release_id' });
+      fail(res, 403, 'forbidden', 'Forbidden');
       return;
     }
 
@@ -72,23 +63,17 @@ export async function removeFromWantlist(req: AuthRequest, res: Response): Promi
     res.status(204).send();
   } catch (err) {
     logger.error({ err }, 'Failed to remove from wantlist');
-    res.status(502).json({ error: 'Failed to remove from wantlist' });
+    fail(res, 502, 'discogs_error', 'Failed to remove from wantlist');
   }
 }
 
 // POST /api/v1/wantlist/:username/:releaseId/move → Release (now in collection)
 export async function moveToCollection(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { username, releaseId: releaseIdParam } = req.params as { username: string; releaseId: string };
+    const { username, releaseId } = req.valid!.params as UsernameReleaseParams;
 
     if (req.user?.username !== username) {
-      res.status(403).json({ error: 'Forbidden' });
-      return;
-    }
-
-    const releaseId = parseInt(releaseIdParam, 10);
-    if (isNaN(releaseId)) {
-      res.status(400).json({ error: 'Invalid release_id' });
+      fail(res, 403, 'forbidden', 'Forbidden');
       return;
     }
 
@@ -102,6 +87,6 @@ export async function moveToCollection(req: AuthRequest, res: Response): Promise
     res.status(201).json({ ...releaseToRelease(detail, 'collection'), instanceId: addResult.instance_id });
   } catch (err) {
     logger.error({ err }, 'Failed to move to collection');
-    res.status(502).json({ error: 'Failed to move to collection' });
+    fail(res, 502, 'discogs_error', 'Failed to move to collection');
   }
 }
