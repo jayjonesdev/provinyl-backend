@@ -1,5 +1,16 @@
 import { Request } from 'express';
 import { Document } from 'mongoose';
+import type { ValidatedData } from '../middleware/validate';
+
+// Validated/coerced request input, populated by the validate() middleware.
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      valid?: ValidatedData;
+    }
+  }
+}
 
 export interface IUser extends Document {
   username: string;

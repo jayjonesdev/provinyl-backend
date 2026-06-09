@@ -1,7 +1,7 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
+import { pinoHttp } from 'pino-http';
 import cookieParser from 'cookie-parser';
 import mongoose from 'mongoose';
 import { env } from './config/env';
@@ -21,8 +21,8 @@ app.use(
   }),
 );
 
-// Logging
-app.use(morgan('dev'));
+// Structured request logging (bound to the app's pino logger)
+app.use(pinoHttp({ logger }));
 
 // Cookies + body parsing
 app.use(cookieParser());

@@ -10,6 +10,7 @@
 import crypto from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { CSRF_COOKIE, ensureCsrfCookie } from '../auth/cookies';
+import { fail } from '../utils/httpError';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -30,7 +31,7 @@ export function csrfMiddleware(req: Request, res: Response, next: NextFunction):
   const headerToken = req.get('x-csrf-token');
 
   if (!cookieToken || !headerToken || !safeEqual(cookieToken, headerToken)) {
-    res.status(403).json({ error: 'Invalid CSRF token' });
+    fail(res, 403, 'csrf_invalid', 'Invalid CSRF token');
     return;
   }
 

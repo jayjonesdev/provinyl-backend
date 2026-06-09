@@ -1,29 +1,31 @@
 import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
 import { env } from '../config/env';
-
-export interface AppError extends Error {
-  statusCode?: number;
-  code?: string;
-}
+import { ApiError, fail } from '../utils/httpError';
 
 export function errorMiddleware(
-  err: AppError,
+  err: unknown,
   _req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
-  const statusCode = err.statusCode ?? 500;
-  const message = err.message || 'Internal server error';
+  if (err instanceof ApiError) {
+    if (err.statusCode >= 500) logger.error({ err }, 'Request error');
+    fail(res, err.statusCode, err.code, err.message, err.details);
+    return;
+  }
 
-  logger.error({ err, statusCode }, 'Request error');
-
-  res.status(statusCode).json({
-    error: message,
-    ...(env.NODE_ENV !== 'production' && { stack: err.stack }),
-  });
+  const error = err as Error;
+  logger.error({ err: error }, 'Unhandled request error');
+  fail(
+    res,
+    500,
+    'internal_error',
+    error?.message || 'Internal server error',
+    env.NODE_ENV !== 'production' && error?.stack ? { stack: error.stack } : undefined,
+  );
 }
 
 export function notFoundMiddleware(_req: Request, res: Response): void {
-  res.status(404).json({ error: 'Route not found' });
+  fail(res, 404, 'not_found', 'Route not found');
 }

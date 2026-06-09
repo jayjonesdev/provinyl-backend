@@ -5,7 +5,17 @@ import { getRelease } from '../handlers/releaseHandler';
 import { search } from '../handlers/searchHandler';
 import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from '../handlers/wantlistHandler';
 import { requireAuth } from '../middleware/authMiddleware';
+import { validate } from '../middleware/validate';
 import { ensureCsrfCookie } from '../auth/cookies';
+import {
+  callbackQuery,
+  usernameParams,
+  releaseBody,
+  usernameReleaseParams,
+  releaseParams,
+  releaseQuery,
+  searchQuery,
+} from '../validators';
 
 const router: Router = Router();
 
@@ -21,26 +31,26 @@ router.get('/auth/csrf', (req: Request, res: Response) => {
 
 // Auth
 router.get('/auth/login', login);
-router.get('/auth/callback', callback);
+router.get('/auth/callback', validate({ query: callbackQuery }), callback);
 router.get('/auth/me', requireAuth, me);
 router.post('/auth/refresh', refresh);
 router.post('/auth/logout', logout);
 
 // Collection
-router.get('/collection/:username', requireAuth, getCollection);
-router.post('/collection/:username', requireAuth, addToCollection);
-router.delete('/collection/:username/:releaseId', requireAuth, removeFromCollection);
+router.get('/collection/:username', requireAuth, validate({ params: usernameParams }), getCollection);
+router.post('/collection/:username', requireAuth, validate({ params: usernameParams, body: releaseBody }), addToCollection);
+router.delete('/collection/:username/:releaseId', requireAuth, validate({ params: usernameReleaseParams }), removeFromCollection);
 
 // Wantlist
-router.get('/wantlist/:username', requireAuth, getWantlist);
-router.post('/wantlist/:username', requireAuth, addToWantlist);
-router.delete('/wantlist/:username/:releaseId', requireAuth, removeFromWantlist);
-router.post('/wantlist/:username/:releaseId/move', requireAuth, moveToCollection);
+router.get('/wantlist/:username', requireAuth, validate({ params: usernameParams }), getWantlist);
+router.post('/wantlist/:username', requireAuth, validate({ params: usernameParams, body: releaseBody }), addToWantlist);
+router.delete('/wantlist/:username/:releaseId', requireAuth, validate({ params: usernameReleaseParams }), removeFromWantlist);
+router.post('/wantlist/:username/:releaseId/move', requireAuth, validate({ params: usernameReleaseParams }), moveToCollection);
 
 // Release detail — no auth required (uses app-level credentials)
-router.get('/release/:id', getRelease);
+router.get('/release/:id', validate({ params: releaseParams, query: releaseQuery }), getRelease);
 
 // Search
-router.get('/search', requireAuth, search);
+router.get('/search', requireAuth, validate({ query: searchQuery }), search);
 
 export default router;

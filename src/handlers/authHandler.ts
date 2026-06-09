@@ -17,8 +17,10 @@ import {
 } from '../auth/cookies';
 import { encrypt } from '../utils/crypto';
 import { createUserClient } from '../services/discogsService';
+import { fail } from '../utils/httpError';
 import { User } from '../models/User';
 import { AuthRequest } from '../types';
+import type { CallbackQuery } from '../validators';
 
 // ─── GET /api/v1/auth/login ───────────────────────────────────────────────────
 export async function login(_req: Request, res: Response): Promise<void> {
@@ -30,23 +32,18 @@ export async function login(_req: Request, res: Response): Promise<void> {
     res.json({ authUrl: authorizeUrl });
   } catch (err) {
     logger.error({ err }, 'Failed to get Discogs request token');
-    res.status(502).json({ error: 'Failed to initiate Discogs authentication' });
+    fail(res, 502, 'discogs_error', 'Failed to initiate Discogs authentication');
   }
 }
 
 // ─── GET /api/v1/auth/callback ────────────────────────────────────────────────
 export async function callback(req: Request, res: Response): Promise<void> {
   try {
-    const { oauth_token, oauth_verifier } = req.query as Record<string, string>;
-
-    if (!oauth_token || !oauth_verifier) {
-      res.status(400).json({ error: 'Missing OAuth parameters' });
-      return;
-    }
+    const { oauth_token, oauth_verifier } = req.valid!.query as CallbackQuery;
 
     const requestTokenSecret = consumePendingTokenSecret(oauth_token);
     if (!requestTokenSecret) {
-      res.status(400).json({ error: 'Invalid or expired OAuth state' });
+      fail(res, 400, 'invalid_oauth_state', 'Invalid or expired OAuth state');
       return;
     }
 
@@ -76,7 +73,7 @@ export async function callback(req: Request, res: Response): Promise<void> {
     );
 
     if (!user) {
-      res.status(500).json({ error: 'Failed to create user' });
+      fail(res, 500, 'internal_error', 'Failed to create user');
       return;
     }
 
@@ -100,13 +97,13 @@ export async function me(req: AuthRequest, res: Response): Promise<void> {
   try {
     const user = req.user;
     if (!user) {
-      res.status(401).json({ error: 'Unauthorized' });
+      fail(res, 401, 'unauthorized', 'Unauthorized');
       return;
     }
     res.json({ username: user.username, avatar_url: user.avatarUrl });
   } catch (err) {
     logger.error({ err }, 'Failed to get user info');
-    res.status(500).json({ error: 'Internal server error' });
+    fail(res, 500, 'internal_error', 'Internal server error');
   }
 }
 
@@ -116,18 +113,18 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     const token = req.cookies?.[REFRESH_COOKIE] as string | undefined;
 
     if (!token) {
-      res.status(401).json({ error: 'Refresh token required' });
+      fail(res, 401, 'unauthorized', 'Refresh token required');
       return;
     }
 
     // Validate JWT
     const claims = jwtService.validateToken(token);
     if (claims.token_type !== 'refresh') {
-      res.status(401).json({ error: 'Invalid token type' });
+      fail(res, 401, 'invalid_token', 'Invalid token type');
       return;
     }
     if (!claims.family) {
-      res.status(401).json({ error: 'Invalid token structure' });
+      fail(res, 401, 'invalid_token', 'Invalid token structure');
       return;
     }
 
@@ -138,7 +135,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
       logger.warn({ family: claims.family }, 'Refresh token reuse detected — revoking family');
       await tokenService.revokeFamilyTokens(claims.family);
       clearAuthCookies(res);
-      res.status(401).json({ error: 'Token reuse detected. All sessions revoked.' });
+      fail(res, 401, 'token_reuse', 'Token reuse detected. All sessions revoked.');
       return;
     }
 
@@ -149,7 +146,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     const user = await User.findById(claims.user_id);
     if (!user) {
       clearAuthCookies(res);
-      res.status(401).json({ error: 'User not found' });
+      fail(res, 401, 'unauthorized', 'User not found');
       return;
     }
 
@@ -173,7 +170,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
   } catch (err) {
     logger.error({ err }, 'Token refresh failed');
     clearAuthCookies(res);
-    res.status(401).json({ error: 'Invalid or expired refresh token' });
+    fail(res, 401, 'invalid_token', 'Invalid or expired refresh token');
   }
 }
 
