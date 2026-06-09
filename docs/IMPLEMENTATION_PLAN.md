@@ -241,8 +241,12 @@ Backend-driven, minimal:
    refresh rotation + reuse) with the data layer mocked and jwt/middleware real;
    GitHub Actions `ci.yml` (lint/typecheck/test/build); `docker-compose.yml`
    (mongo). 66 tests total; all green. *(quality)*
-6. **Deploy** — multi-stage Dockerfile, healthcheck, env docs, target wiring
-   (TBD — see open questions). *(ship)*
+6. **Deploy** ✅ **done (Render)** — hardened multi-stage Dockerfile (node 22,
+   non-root, container HEALTHCHECK) — image build + end-to-end container boot
+   verified (Mongo connected, `/health` 200); `.dockerignore`; `render.yaml`
+   Blueprint (Docker web service, `healthCheckPath`, secrets `sync:false`);
+   `docs/DEPLOY-RENDER.md`. Remaining steps are manual (Render dashboard
+   Blueprint + secret env vars + Atlas + Discogs callback URL). *(ship)*
 
 ---
 
@@ -259,9 +263,8 @@ Backend-driven, minimal:
 
 ## 11. Open questions / TODO
 
-- **Deployment target?** The old `provinyl-services` used AWS (CodeBuild
-  buildspecs). Where does this run — AWS (ECS/Fargate), Fly, Render, a VPS? Drives
-  Dockerfile, secrets, and CI/CD.
+- **Deployment target:** ✅ **Render** (Docker web service via `render.yaml`;
+  MongoDB Atlas for the database). See `docs/DEPLOY-RENDER.md`.
 - **Discogs app credentials** (consumer key/secret) + registered callback URL
   needed to exercise the live flow.
 - **Per-item value/condition**: confirm whether your Discogs collection uses
