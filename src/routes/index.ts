@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { login, callback, me, refresh, logout } from '../handlers/authHandler';
-import { getCollection, addToCollection, removeFromCollection } from '../handlers/collectionHandler';
+import { getCollection, addToCollection, removeFromCollection, getCollectionValue } from '../handlers/collectionHandler';
 import { getRelease } from '../handlers/releaseHandler';
 import { search } from '../handlers/searchHandler';
 import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from '../handlers/wantlistHandler';
@@ -38,6 +38,7 @@ router.post('/auth/logout', logout);
 
 // Collection
 router.get('/collection/:username', requireAuth, validate({ params: usernameParams }), getCollection);
+router.get('/collection/:username/value', requireAuth, validate({ params: usernameParams }), getCollectionValue);
 router.post('/collection/:username', requireAuth, validate({ params: usernameParams, body: releaseBody }), addToCollection);
 router.delete('/collection/:username/:releaseId', requireAuth, validate({ params: usernameReleaseParams }), removeFromCollection);
 
