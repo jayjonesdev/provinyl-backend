@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     removeFromCollection: vi.fn(),
     addToWantlist: vi.fn(),
     removeFromWantlist: vi.fn(),
+    getCollectionValue: vi.fn(),
   },
   appClient: { getAllPublicCollection: vi.fn(), getRelease: vi.fn(), searchDatabase: vi.fn() },
   User: { findById: vi.fn(), findOneAndUpdate: vi.fn() },
@@ -182,6 +183,13 @@ describe('collection', () => {
     const res = await authedMutate('delete', '/api/v1/collection/me/999');
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('not_found');
+  });
+
+  it('GET /value returns the Discogs collection value', async () => {
+    mocks.userClient.getCollectionValue.mockResolvedValue({ minimum: '$10.00', median: '$20.00', maximum: '$30.00' });
+    const res = await authedGet('/api/v1/collection/me/value');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ minimum: '$10.00', median: '$20.00', maximum: '$30.00' });
   });
 });
 

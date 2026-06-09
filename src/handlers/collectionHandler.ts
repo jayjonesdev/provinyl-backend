@@ -76,3 +76,23 @@ export async function removeFromCollection(req: AuthRequest, res: Response): Pro
     fail(res, 502, 'discogs_error', 'Failed to remove from collection');
   }
 }
+
+// GET /api/v1/collection/:username/value → { minimum, median, maximum }
+// Discogs' aggregate collection value (owner-only). The per-item value isn't
+// available in list data, so this is the source for the collection-value stat.
+export async function getCollectionValue(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { username } = req.valid!.params as UsernameParams;
+
+    if (req.user?.username !== username) {
+      fail(res, 403, 'forbidden', 'Forbidden');
+      return;
+    }
+
+    const value = await createUserClientFor(req.user).getCollectionValue(username);
+    res.json(value);
+  } catch (err) {
+    logger.error({ err }, 'Failed to fetch collection value');
+    fail(res, 502, 'discogs_error', 'Failed to fetch collection value');
+  }
+}
