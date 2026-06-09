@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
-import { createUserClient, createAppClient } from '../services/discogsService';
+import { createUserClientFor, createAppClient } from '../services/discogsService';
 import { collectionItemToRelease, releaseToRelease } from '../utils/toRelease';
 import logger from '../utils/logger';
 
@@ -16,7 +16,7 @@ export async function getCollection(req: AuthRequest, res: Response): Promise<vo
 
     let data;
     if (isOwner && req.user) {
-      const client = createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret);
+      const client = createUserClientFor(req.user);
       data = await client.getCollection(username, page, perPage);
     } else {
       // Public collection — use app-level credentials.
@@ -47,7 +47,7 @@ export async function addToCollection(req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const client = createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret);
+    const client = createUserClientFor(req.user);
     const addResult = (await client.addToCollection(username, releaseId)) as { instance_id?: number };
     const detail = await client.getRelease(releaseId);
 
@@ -76,7 +76,7 @@ export async function removeFromCollection(req: AuthRequest, res: Response): Pro
       return;
     }
 
-    const client = createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret);
+    const client = createUserClientFor(req.user);
     await client.removeFromCollection(username, releaseId, instanceId);
 
     res.status(204).send();

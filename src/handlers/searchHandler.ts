@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
-import { createUserClient, createAppClient } from '../services/discogsService';
+import { createUserClientFor, createAppClient } from '../services/discogsService';
 import { searchResultToRelease, mapPagination } from '../utils/toRelease';
 import logger from '../utils/logger';
 
@@ -47,10 +47,7 @@ export async function search(req: AuthRequest, res: Response): Promise<void> {
     let wantlistIds = new Set<number>();
     if (req.user) {
       try {
-        const userClient = createUserClient(
-          req.user.discogsAccessToken,
-          req.user.discogsAccessTokenSecret,
-        );
+        const userClient = createUserClientFor(req.user);
         // Fetch up to 100 wantlist items to check against — page 1 is sufficient for the flag
         const wantlistData = await userClient.getWantlist(req.user.username, 1, 100);
         wantlistIds = new Set((wantlistData.wants ?? []).map((w) => w.id));
@@ -60,7 +57,7 @@ export async function search(req: AuthRequest, res: Response): Promise<void> {
     }
 
     const client = req.user
-      ? createUserClient(req.user.discogsAccessToken, req.user.discogsAccessTokenSecret)
+      ? createUserClientFor(req.user)
       : createAppClient();
 
     const searchQuery = ['artist', 'label', 'catno', 'barcode', 'track'].includes(type) ? '' : q;

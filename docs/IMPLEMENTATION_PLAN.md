@@ -212,8 +212,13 @@ Backend-driven, minimal:
    deterministic `art`, 25 vitest unit tests. All read+write handlers emit
    `Release`; old `normalize.ts`/`api.types.ts` removed. typecheck + build + lint
    green. *(core)*
-2. **Cookie sessions** — `cookie-parser`, cookie-set/read/clear across
-   auth flow, `requireAuth` from cookie, CSRF, encrypted token-at-rest. *(auth)*
+2. **Cookie sessions** ✅ **done** — `cookie-parser`; `auth/cookies.ts`
+   (httpOnly access + refresh cookies, refresh scoped to `/api/v1/auth`);
+   callback sets cookies + encrypts Discogs tokens (`utils/crypto.ts`,
+   AES-256-GCM) + clean redirect; refresh/logout read+clear cookies;
+   `requireAuth` reads the access cookie (Bearer fallback); double-submit CSRF
+   (`middleware/csrfMiddleware.ts` + `/auth/csrf`); `TOKEN_ENC_KEY` env. 10 new
+   tests; typecheck/build/lint green. *(auth)*
 3. **Discogs resilience** — 429 backoff + concurrency cap + cache; all-pages
    aggregation; `getIdentity()`; server-side `instance_id` resolution. *(reliability)*
 4. **Validation & errors** — `zod` request schemas + `validate` middleware;

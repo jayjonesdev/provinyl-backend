@@ -9,6 +9,13 @@ import {
   consumePendingTokenSecret,
 } from '../auth/discogsOAuth';
 import tokenService from '../services/tokenService';
+import {
+  setAuthCookies,
+  clearAuthCookies,
+  ensureCsrfCookie,
+  REFRESH_COOKIE,
+} from '../auth/cookies';
+import { encrypt } from '../utils/crypto';
 import { User } from '../models/User';
 import { AuthRequest } from '../types';
 import axios from 'axios';
@@ -66,8 +73,9 @@ export async function callback(req: Request, res: Response): Promise<void> {
       {
         username,
         avatarUrl: avatar_url,
-        discogsAccessToken: discogsToken,
-        discogsAccessTokenSecret: discogsTokenSecret,
+        // Encrypt Discogs OAuth tokens at rest (AES-256-GCM).
+        discogsAccessToken: encrypt(discogsToken),
+        discogsAccessTokenSecret: encrypt(discogsTokenSecret),
         isActive: true,
       },
       { upsert: true, new: true },
@@ -83,13 +91,10 @@ export async function callback(req: Request, res: Response): Promise<void> {
     const expirySeconds = jwtService.parseExpiryToSeconds(env.JWT_REFRESH_EXPIRY);
     await tokenService.storeRefreshToken(user._id, tokens.refreshToken, extractFamily(tokens.refreshToken), expirySeconds);
 
-    // Redirect to frontend callback page with tokens in query params
-    const redirectUrl = new URL(`${env.CLIENT_ORIGIN}/auth/callback`);
-    redirectUrl.searchParams.set('accessToken', tokens.accessToken);
-    redirectUrl.searchParams.set('refreshToken', tokens.refreshToken);
-    redirectUrl.searchParams.set('expiresIn', String(tokens.expiresIn));
-
-    res.redirect(redirectUrl.toString());
+    // Session lives in httpOnly cookies; redirect to a clean frontend URL.
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+    ensureCsrfCookie(req, res);
+    res.redirect(env.CLIENT_ORIGIN);
   } catch (err) {
     logger.error({ err }, 'OAuth callback failed');
     res.redirect(`${env.CLIENT_ORIGIN}/unauthorized`);
@@ -114,10 +119,10 @@ export async function me(req: AuthRequest, res: Response): Promise<void> {
 // ─── POST /api/v1/auth/refresh ────────────────────────────────────────────────
 export async function refresh(req: Request, res: Response): Promise<void> {
   try {
-    const { refreshToken: token } = req.body as { refreshToken?: string };
+    const token = req.cookies?.[REFRESH_COOKIE] as string | undefined;
 
     if (!token) {
-      res.status(400).json({ error: 'Refresh token required' });
+      res.status(401).json({ error: 'Refresh token required' });
       return;
     }
 
@@ -138,6 +143,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
       // Token reuse detected — revoke entire family
       logger.warn({ family: claims.family }, 'Refresh token reuse detected — revoking family');
       await tokenService.revokeFamilyTokens(claims.family);
+      clearAuthCookies(res);
       res.status(401).json({ error: 'Token reuse detected. All sessions revoked.' });
       return;
     }
@@ -148,6 +154,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     // Get user
     const user = await User.findById(claims.user_id);
     if (!user) {
+      clearAuthCookies(res);
       res.status(401).json({ error: 'User not found' });
       return;
     }
@@ -164,14 +171,14 @@ export async function refresh(req: Request, res: Response): Promise<void> {
       storedToken.deviceName,
     );
 
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     res.json({
       user: { username: user.username, avatar_url: user.avatarUrl },
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
       expiresIn: tokens.expiresIn,
     });
   } catch (err) {
     logger.error({ err }, 'Token refresh failed');
+    clearAuthCookies(res);
     res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 }
@@ -179,13 +186,15 @@ export async function refresh(req: Request, res: Response): Promise<void> {
 // ─── POST /api/v1/auth/logout ─────────────────────────────────────────────────
 export async function logout(req: Request, res: Response): Promise<void> {
   try {
-    const { refreshToken: token } = req.body as { refreshToken?: string };
+    const token = req.cookies?.[REFRESH_COOKIE] as string | undefined;
     if (token) {
       await tokenService.deleteRefreshToken(token);
     }
+    clearAuthCookies(res);
     res.json({ message: 'Logged out successfully' });
   } catch (err) {
     logger.error({ err }, 'Logout error');
+    clearAuthCookies(res);
     res.json({ message: 'Logged out successfully' });
   }
 }
