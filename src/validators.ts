@@ -14,6 +14,13 @@ export const callbackQuery = z.object({
   oauth_verifier: z.string().min(1),
 });
 
+// `platform=ios` switches /auth/login to the native flow: it 302-redirects to
+// Discogs (instead of returning JSON) and the callback returns tokens via a
+// deep link. Defaults to the web flow.
+export const loginQuery = z.object({
+  platform: z.enum(['web', 'ios']).optional().default('web'),
+});
+
 // ── collection / wantlist ────────────────────────────────────────────────────
 export const usernameParams = z.object({ username });
 export const releaseBody = z.object({ releaseId });
@@ -74,6 +81,7 @@ export const preferencesBody = z
 
 // Inferred types handlers read off req.valid.
 export type CallbackQuery = z.infer<typeof callbackQuery>;
+export type LoginQuery = z.infer<typeof loginQuery>;
 export type PreferencesBody = z.infer<typeof preferencesBody>;
 export type ConditionBody = z.infer<typeof conditionBody>;
 export type UsernameParams = z.infer<typeof usernameParams>;

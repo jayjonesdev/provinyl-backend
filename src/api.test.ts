@@ -317,6 +317,38 @@ describe('refresh rotation', () => {
   });
 });
 
+describe('native (iOS) auth', () => {
+  it('cookieless Bearer mutation bypasses CSRF and adds to collection', async () => {
+    mocks.userClient.addToCollection.mockResolvedValue({ instance_id: 7 });
+    mocks.userClient.getRelease.mockResolvedValue(discogsRelease);
+
+    // No cookies, no X-CSRF-Token — just a Bearer access token.
+    const res = await request(app)
+      .post('/api/v1/collection/me')
+      .set('Authorization', `Bearer ${tokens().accessToken}`)
+      .send({ releaseId: 305571 });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ id: 305571, list: 'collection', instanceId: 7 });
+  });
+
+  it('refresh via Bearer (no cookie) returns the JWT pair in the body and sets no cookies', async () => {
+    mocks.tokenService.findRefreshToken.mockResolvedValue({ deviceId: undefined, deviceName: undefined });
+    mocks.tokenService.deleteRefreshToken.mockResolvedValue(undefined);
+    mocks.tokenService.storeRefreshToken.mockResolvedValue(undefined);
+
+    const res = await request(app)
+      .post('/api/v1/auth/refresh')
+      .set('Authorization', `Bearer ${tokens().refreshToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.username).toBe('me');
+    expect(typeof res.body.accessToken).toBe('string');
+    expect(typeof res.body.refreshToken).toBe('string');
+    expect(res.headers['set-cookie']).toBeUndefined();
+  });
+});
+
 describe('preferences', () => {
   it('GET /auth/me returns preferences (null when unset)', async () => {
     const res = await authedGet('/api/v1/auth/me');
