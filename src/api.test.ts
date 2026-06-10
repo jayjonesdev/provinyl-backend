@@ -111,9 +111,11 @@ beforeEach(() => {
   mocks.User.findById.mockResolvedValue(fakeUser);
   // Default: no custom grade fields (most tests don't care); overridden where needed.
   mocks.userClient.getCollectionFields.mockResolvedValue({ fields: [] });
-  // Default: no per-item meta. find(...).select(...).lean() → []
+  // Default: no per-item meta. Self-referential chain supports both
+  // find(...).lean() and find(...).select(...).lean().
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mocks.CollectionItemMeta.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([]) }) } as any);
+  const chain: any = { select: () => chain, lean: () => Promise.resolve([]) };
+  mocks.CollectionItemMeta.find.mockReturnValue(chain);
 });
 
 describe('infrastructure', () => {
@@ -287,6 +289,32 @@ describe('collection item meta (value / cost basis)', () => {
     const res = await authedMutate('post', '/api/v1/collection/someone-else/305571/meta').send({ value: { amount: 10, currency: 'USD' } });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('forbidden');
+  });
+});
+
+describe('export (appraisal PDF)', () => {
+  it('GET /export/appraisal.pdf streams a PDF', async () => {
+    mocks.userClient.getAllCollection.mockResolvedValue([collectionItem]);
+    const res = await authedGet('/api/v1/export/appraisal.pdf').buffer().parse((r, cb) => {
+      const chunks: Buffer[] = [];
+      r.on('data', (c: Buffer) => chunks.push(c));
+      r.on('end', () => cb(null, Buffer.concat(chunks)));
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(res.headers['content-disposition']).toContain('attachment');
+    expect((res.body as Buffer).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+
+  it('rejects a malformed scope → 400', async () => {
+    const res = await authedGet('/api/v1/export/appraisal.pdf?scope=bogus');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation_error');
+  });
+
+  it('requires auth → 401', async () => {
+    const res = await request(app).get('/api/v1/export/appraisal.pdf');
+    expect(res.status).toBe(401);
   });
 });
 

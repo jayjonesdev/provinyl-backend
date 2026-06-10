@@ -87,6 +87,16 @@ export const itemMetaBody = z
     { message: 'Provide at least one of value, purchasePrice, purchaseDate, note' },
   );
 
+// ── export (appraisal PDF) ────────────────────────────────────────────────────
+// scope=all (default) or over:<amount> to include only items at/above a value.
+export const exportQuery = z.object({
+  scope: z
+    .string()
+    .regex(/^(all|over:\d+(\.\d+)?)$/, 'scope must be "all" or "over:<amount>"')
+    .optional()
+    .default('all'),
+});
+
 // ── preferences ──────────────────────────────────────────────────────────────
 // All keys optional (partial updates merge server-side); .strict() rejects
 // unknown keys so we never persist junk. Mirrors provinyl-web usePrefs.
@@ -109,6 +119,7 @@ export type LoginQuery = z.infer<typeof loginQuery>;
 export type PreferencesBody = z.infer<typeof preferencesBody>;
 export type ConditionBody = z.infer<typeof conditionBody>;
 export type ItemMetaBody = z.infer<typeof itemMetaBody>;
+export type ExportQuery = z.infer<typeof exportQuery>;
 export type UsernameParams = z.infer<typeof usernameParams>;
 export type ReleaseBody = z.infer<typeof releaseBody>;
 export type UsernameReleaseParams = z.infer<typeof usernameReleaseParams>;

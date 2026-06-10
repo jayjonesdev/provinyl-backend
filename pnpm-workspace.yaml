@@ -1,5 +1,7 @@
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - pdfkit@0.19.1
 # Allow these dependencies to run their install/build scripts (pnpm 11+).
 onlyBuiltDependencies:
   - esbuild

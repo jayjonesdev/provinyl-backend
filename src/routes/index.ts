@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { login, callback, me, refresh, logout, updatePreferences } from '../handlers/authHandler';
 import { getCollection, addToCollection, removeFromCollection, getCollectionValue, setCondition } from '../handlers/collectionHandler';
 import { getItemMeta, setItemMeta, deleteItemMeta } from '../handlers/itemMetaHandler';
+import { exportAppraisal } from '../handlers/exportHandler';
 import { getRelease } from '../handlers/releaseHandler';
 import { search } from '../handlers/searchHandler';
 import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from '../handlers/wantlistHandler';
@@ -21,6 +22,7 @@ import {
   preferencesBody,
   conditionBody,
   itemMetaBody,
+  exportQuery,
 } from '../validators';
 
 const router: Router = Router();
@@ -65,5 +67,8 @@ router.get('/release/:id', validate({ params: releaseParams, query: releaseQuery
 
 // Search
 router.get('/search', requireAuth, validate({ query: searchQuery }), search);
+
+// Export — branded appraisal PDF of the authed user's collection
+router.get('/export/appraisal.pdf', requireAuth, validate({ query: exportQuery }), exportAppraisal);
 
 export default router;
