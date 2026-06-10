@@ -178,6 +178,45 @@ Discogs unless the user revoked access there.)
 
 ---
 
+## 7a. Native (iOS) clients
+
+The web flow above is cookie-based. Native apps (`provinyl-ios`) can't use httpOnly
+cookies or the web redirect, so three **additive** behaviors support them — web
+behavior is unchanged:
+
+1. **Login → 302.** `GET /auth/login?platform=ios` 302-redirects straight to the
+   Discogs authorize URL (instead of returning `{ authUrl }`), so the app can drive
+   it with `ASWebAuthenticationSession`. The pending request-token is flagged
+   `mobile` (`auth/discogsOAuth.ts`).
+2. **Callback → deep link.** For a mobile flow, `/auth/callback` skips cookies and
+   redirects to `IOS_CALLBACK_URL` (default `provinyl://auth/callback`) with the JWT
+   pair in the **URL fragment**: `#access=<jwt>&refresh=<jwt>` (a fragment never
+   reaches server logs). On error: `#error=auth_failed`. The app captures the
+   redirect, parses the fragment, and stores both tokens in the **Keychain**.
+3. **Cookieless session.** `requireAuth` already accepts `Authorization: Bearer
+   <access>`. The app refreshes via `POST /auth/refresh` with the **refresh** token
+   in a `Bearer` header (or `{ refreshToken }` body) — when there's no `pv_refresh`
+   cookie the response returns `{ user, accessToken, refreshToken, expiresIn }` in
+   the body (web responses stay token-free). `logout` likewise accepts the refresh
+   token via Bearer/body. **CSRF** is bypassed only for cookieless Bearer requests
+   (no `pv_csrf` cookie + a `Bearer` header) — CSRF only threatens ambient-cookie
+   auth (`middleware/csrfMiddleware.ts`).
+
+```
+iOS app                Backend                         Discogs
+  │ ASWebAuth → /auth/login?platform=ios ──302──▶ authorize │
+  │                              user approves              │
+  │ /auth/callback?oauth_token&oauth_verifier ◀─────────────│
+  │ ◀─302 provinyl://auth/callback#access=…&refresh=…       │
+  │ store both in Keychain; Bearer <access> on every call   │
+  │ 401 → POST /auth/refresh (Bearer <refresh>) → new pair  │
+```
+
+Config: `IOS_CALLBACK_URL` (`src/config/env.ts`) must match the app's registered
+URL scheme.
+
+---
+
 ## 8. Where the code lives
 
 | Concern | File |

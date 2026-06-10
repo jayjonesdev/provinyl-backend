@@ -28,9 +28,15 @@ interface AccessTokenResult {
   accessTokenSecret: string;
 }
 
-// In-memory store for pending OAuth state: requestToken → requestTokenSecret
-// Entries expire after 10 minutes
-const pendingTokenSecrets = new Map<string, { secret: string; expiresAt: number }>();
+// In-memory store for pending OAuth state: requestToken → { secret, mobile }.
+// `mobile` records whether the flow began from the native (iOS) login, so the
+// callback redirects to the deep link instead of CLIENT_ORIGIN.
+// Entries expire after 10 minutes.
+export interface PendingToken {
+  secret: string;
+  mobile: boolean;
+}
+const pendingTokenSecrets = new Map<string, { secret: string; mobile: boolean; expiresAt: number }>();
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
 function prunePendingTokens() {
@@ -40,17 +46,17 @@ function prunePendingTokens() {
   }
 }
 
-export function storePendingTokenSecret(requestToken: string, secret: string): void {
+export function storePendingTokenSecret(requestToken: string, secret: string, mobile = false): void {
   prunePendingTokens();
-  pendingTokenSecrets.set(requestToken, { secret, expiresAt: Date.now() + PENDING_TTL_MS });
+  pendingTokenSecrets.set(requestToken, { secret, mobile, expiresAt: Date.now() + PENDING_TTL_MS });
 }
 
-export function consumePendingTokenSecret(requestToken: string): string | null {
+export function consumePendingTokenSecret(requestToken: string): PendingToken | null {
   prunePendingTokens();
   const entry = pendingTokenSecrets.get(requestToken);
   if (!entry) return null;
   pendingTokenSecrets.delete(requestToken);
-  return entry.secret;
+  return { secret: entry.secret, mobile: entry.mobile };
 }
 
 export function getRequestToken(callbackUrl: string): Promise<RequestTokenResult> {

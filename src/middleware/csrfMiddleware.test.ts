@@ -8,6 +8,7 @@ function mockReq(opts: { method?: string; cookies?: Record<string, string>; head
   return {
     method: opts.method ?? 'GET',
     cookies: opts.cookies ?? {},
+    headers,
     get: (name: string) => headers[name.toLowerCase()],
   } as unknown as Request;
 }
@@ -63,6 +64,28 @@ describe('csrfMiddleware', () => {
 
   it('rejects a mutation when cookie and header differ', () => {
     const req = mockReq({ method: 'DELETE', cookies: { [CSRF_COOKIE]: 'tok123' }, headers: { 'x-csrf-token': 'nope' } });
+    const res = mockRes();
+    const next = vi.fn();
+    csrfMiddleware(req, res as unknown as Response, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('bypasses CSRF for cookieless Bearer clients (native apps)', () => {
+    const req = mockReq({ method: 'POST', headers: { authorization: 'Bearer jwt.access.token' } });
+    const res = mockRes();
+    const next = vi.fn();
+    csrfMiddleware(req, res as unknown as Response, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('still enforces CSRF for a Bearer request that also carries a CSRF cookie', () => {
+    const req = mockReq({
+      method: 'POST',
+      cookies: { [CSRF_COOKIE]: 'tok123' },
+      headers: { authorization: 'Bearer jwt.access.token' },
+    });
     const res = mockRes();
     const next = vi.fn();
     csrfMiddleware(req, res as unknown as Response, next);

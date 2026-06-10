@@ -16,6 +16,10 @@ const envSchema = z.object({
   DISCOGS_CONSUMER_SECRET: z.string().min(1, 'DISCOGS_CONSUMER_SECRET is required'),
   DISCOGS_CALLBACK_URL: z.string().url('DISCOGS_CALLBACK_URL must be a valid URL'),
   CLIENT_ORIGIN: z.string().url('CLIENT_ORIGIN must be a valid URL'),
+  // Deep link the native (iOS) OAuth flow redirects back to after callback. The
+  // JWT pair is appended as a URL fragment (#access=…&refresh=…). Web is
+  // unaffected — it keeps redirecting to CLIENT_ORIGIN with httpOnly cookies.
+  IOS_CALLBACK_URL: z.string().default('provinyl://auth/callback'),
   // 32-byte key (64 hex chars) for AES-256-GCM encryption of Discogs tokens at
   // rest. Generate with: openssl rand -hex 32
   TOKEN_ENC_KEY: z

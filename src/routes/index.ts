@@ -10,6 +10,7 @@ import { ensureCsrfCookie } from '../auth/cookies';
 import { VERSION } from '../version';
 import {
   callbackQuery,
+  loginQuery,
   usernameParams,
   releaseBody,
   usernameReleaseParams,
@@ -33,7 +34,7 @@ router.get('/auth/csrf', (req: Request, res: Response) => {
 });
 
 // Auth
-router.get('/auth/login', login);
+router.get('/auth/login', validate({ query: loginQuery }), login);
 router.get('/auth/callback', validate({ query: callbackQuery }), callback);
 router.get('/auth/me', requireAuth, me);
 router.post('/auth/me/preferences', requireAuth, validate({ body: preferencesBody }), updatePreferences);

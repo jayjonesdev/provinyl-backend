@@ -20,15 +20,37 @@ import { createUserClient } from '../services/discogsService';
 import { fail } from '../utils/httpError';
 import { User } from '../models/User';
 import { AuthRequest, IUserPreferences } from '../types';
-import type { CallbackQuery, PreferencesBody } from '../validators';
+import type { CallbackQuery, PreferencesBody, LoginQuery } from '../validators';
+
+/** Read a refresh token from a cookieless (native) client: Bearer header or body. */
+function nativeRefreshToken(req: Request): string | undefined {
+  const auth = req.headers.authorization;
+  if (auth) {
+    const parts = auth.split(' ');
+    if (parts.length === 2 && parts[0] === 'Bearer') return parts[1];
+  }
+  const fromBody = (req.body as { refreshToken?: unknown } | undefined)?.refreshToken;
+  return typeof fromBody === 'string' ? fromBody : undefined;
+}
 
 // ─── GET /api/v1/auth/login ───────────────────────────────────────────────────
-export async function login(_req: Request, res: Response): Promise<void> {
+// Web (default): returns { authUrl } for the SPA to navigate to.
+// Native (?platform=ios): 302-redirects to Discogs so ASWebAuthenticationSession
+// can follow it; the callback then redirects to the app's deep link with tokens.
+export async function login(req: Request, res: Response): Promise<void> {
   try {
+    const { platform } = (req.valid?.query as LoginQuery | undefined) ?? { platform: 'web' };
+    const mobile = platform === 'ios';
+
     const { requestToken, requestTokenSecret, authorizeUrl } = await getRequestToken(
       env.DISCOGS_CALLBACK_URL,
     );
-    storePendingTokenSecret(requestToken, requestTokenSecret);
+    storePendingTokenSecret(requestToken, requestTokenSecret, mobile);
+
+    if (mobile) {
+      res.redirect(authorizeUrl);
+      return;
+    }
     res.json({ authUrl: authorizeUrl });
   } catch (err) {
     logger.error({ err }, 'Failed to get Discogs request token');
@@ -38,14 +60,17 @@ export async function login(_req: Request, res: Response): Promise<void> {
 
 // ─── GET /api/v1/auth/callback ────────────────────────────────────────────────
 export async function callback(req: Request, res: Response): Promise<void> {
+  let mobile = false;
   try {
     const { oauth_token, oauth_verifier } = req.valid!.query as CallbackQuery;
 
-    const requestTokenSecret = consumePendingTokenSecret(oauth_token);
-    if (!requestTokenSecret) {
+    const pending = consumePendingTokenSecret(oauth_token);
+    if (!pending) {
       fail(res, 400, 'invalid_oauth_state', 'Invalid or expired OAuth state');
       return;
     }
+    mobile = pending.mobile;
+    const requestTokenSecret = pending.secret;
 
     // Exchange for Discogs access token
     const { accessToken: discogsToken, accessTokenSecret: discogsTokenSecret } =
@@ -82,12 +107,24 @@ export async function callback(req: Request, res: Response): Promise<void> {
     const expirySeconds = jwtService.parseExpiryToSeconds(env.JWT_REFRESH_EXPIRY);
     await tokenService.storeRefreshToken(user._id, tokens.refreshToken, extractFamily(tokens.refreshToken), expirySeconds);
 
-    // Session lives in httpOnly cookies; redirect to a clean frontend URL.
+    // Native: hand the JWT pair back via the app deep link (tokens in the URL
+    // fragment so they don't land in server access logs). No cookies.
+    if (mobile) {
+      const frag = `access=${encodeURIComponent(tokens.accessToken)}&refresh=${encodeURIComponent(tokens.refreshToken)}`;
+      res.redirect(`${env.IOS_CALLBACK_URL}#${frag}`);
+      return;
+    }
+
+    // Web: session lives in httpOnly cookies; redirect to a clean frontend URL.
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     ensureCsrfCookie(req, res);
     res.redirect(env.CLIENT_ORIGIN);
   } catch (err) {
     logger.error({ err }, 'OAuth callback failed');
+    if (mobile) {
+      res.redirect(`${env.IOS_CALLBACK_URL}#error=auth_failed`);
+      return;
+    }
     res.redirect(`${env.CLIENT_ORIGIN}/unauthorized`);
   }
 }
@@ -135,7 +172,10 @@ export async function updatePreferences(req: AuthRequest, res: Response): Promis
 // ─── POST /api/v1/auth/refresh ────────────────────────────────────────────────
 export async function refresh(req: Request, res: Response): Promise<void> {
   try {
-    const token = req.cookies?.[REFRESH_COOKIE] as string | undefined;
+    const cookieToken = req.cookies?.[REFRESH_COOKIE] as string | undefined;
+    // Native clients have no cookie — they send the refresh token via Bearer/body.
+    const isNative = !cookieToken;
+    const token = cookieToken ?? nativeRefreshToken(req);
 
     if (!token) {
       fail(res, 401, 'unauthorized', 'Refresh token required');
@@ -187,6 +227,18 @@ export async function refresh(req: Request, res: Response): Promise<void> {
       storedToken.deviceName,
     );
 
+    // Native gets tokens in the body (it stores them in the Keychain). Web keeps
+    // them httpOnly — never expose tokens to browser JS.
+    if (isNative) {
+      res.json({
+        user: { username: user.username, avatar_url: user.avatarUrl },
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresIn: tokens.expiresIn,
+      });
+      return;
+    }
+
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     res.json({
       user: { username: user.username, avatar_url: user.avatarUrl },
@@ -202,7 +254,8 @@ export async function refresh(req: Request, res: Response): Promise<void> {
 // ─── POST /api/v1/auth/logout ─────────────────────────────────────────────────
 export async function logout(req: Request, res: Response): Promise<void> {
   try {
-    const token = req.cookies?.[REFRESH_COOKIE] as string | undefined;
+    // Web sends the refresh cookie; native sends it via Bearer/body.
+    const token = (req.cookies?.[REFRESH_COOKIE] as string | undefined) ?? nativeRefreshToken(req);
     if (token) {
       await tokenService.deleteRefreshToken(token);
     }
