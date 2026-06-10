@@ -80,7 +80,10 @@ describe('csrfMiddleware', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('still enforces CSRF for a Bearer request that also carries a CSRF cookie', () => {
+  it('bypasses CSRF for a Bearer request even if a stray CSRF cookie is present', () => {
+    // URLSession auto-stores the pv_csrf cookie from GET responses, so a native
+    // client's mutation can carry it without an X-CSRF-Token header. Bearer auth
+    // is token-based (not ambient-cookie), so it must still bypass.
     const req = mockReq({
       method: 'POST',
       cookies: { [CSRF_COOKIE]: 'tok123' },
@@ -89,7 +92,7 @@ describe('csrfMiddleware', () => {
     const res = mockRes();
     const next = vi.fn();
     csrfMiddleware(req, res as unknown as Response, next);
-    expect(next).not.toHaveBeenCalled();
-    expect(res.statusCode).toBe(403);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(200);
   });
 });

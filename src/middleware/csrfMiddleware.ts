@@ -27,12 +27,14 @@ export function csrfMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  // Cookieless Bearer clients (native apps) aren't subject to CSRF: the attack
-  // relies on the browser auto-sending the session cookie, which they don't have.
-  // Only bypass when there's no CSRF cookie at all and a Bearer header is present.
-  const authHeader = req.headers.authorization;
-  const hasCsrfCookie = Boolean(req.cookies?.[CSRF_COOKIE]);
-  if (!hasCsrfCookie && authHeader?.startsWith('Bearer ')) {
+  // Bearer-authenticated clients (native apps) aren't subject to CSRF: they use
+  // token auth, not the ambient session cookie that CSRF defends against, and a
+  // browser can't be tricked into attaching an Authorization header cross-site.
+  // (A stray pv_csrf cookie may still be present — URLSession auto-stores it from
+  // GET responses — so we must NOT gate this on the cookie's absence.) The web
+  // app uses cookie auth + X-CSRF-Token and never sends a Bearer header, so it
+  // stays protected by the double-submit check below.
+  if (req.headers.authorization?.startsWith('Bearer ')) {
     next();
     return;
   }
