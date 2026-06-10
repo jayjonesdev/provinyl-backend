@@ -34,9 +34,12 @@ services:
         sync: false
       - key: DISCOGS_CONSUMER_SECRET
         sync: false
-      - key: DISCOGS_CALLBACK_URL # https://<service>.onrender.com/api/v1/auth/callback
+      # Prod uses a custom domain so the SPA and API are same-site (both under
+      # provinyl.io) — required for Safari, which blocks cross-site cookies that
+      # *.onrender.com subdomains would be (they're cross-site per the PSL).
+      - key: DISCOGS_CALLBACK_URL # https://api.provinyl.io/api/v1/auth/callback (must match the Discogs app)
         sync: false
-      - key: CLIENT_ORIGIN # the deployed provinyl-web origin
+      - key: CLIENT_ORIGIN # https://provinyl.io  (the deployed provinyl-web origin)
         sync: false
       - key: TOKEN_ENC_KEY # openssl rand -hex 32
         sync: false
