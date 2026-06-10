@@ -63,6 +63,30 @@ export const conditionBody = z
     message: 'Provide media and/or sleeve',
   });
 
+// ── collection item meta (owner value / cost basis / note) ───────────────────
+const money = z.object({
+  amount: z.number().nonnegative(),
+  currency: z.string().trim().length(3).toUpperCase(),
+});
+export const itemMetaBody = z
+  .object({
+    value: money.optional(),
+    purchasePrice: money.optional(),
+    purchaseDate: z.coerce.date().optional(),
+    note: z.string().max(280).optional(),
+    // Which owned copy this applies to; release-level when omitted.
+    instanceId: z.coerce.number().int().positive().optional(),
+  })
+  .strict()
+  .refine(
+    (b) =>
+      b.value !== undefined ||
+      b.purchasePrice !== undefined ||
+      b.purchaseDate !== undefined ||
+      b.note !== undefined,
+    { message: 'Provide at least one of value, purchasePrice, purchaseDate, note' },
+  );
+
 // ── preferences ──────────────────────────────────────────────────────────────
 // All keys optional (partial updates merge server-side); .strict() rejects
 // unknown keys so we never persist junk. Mirrors provinyl-web usePrefs.
@@ -84,6 +108,7 @@ export type CallbackQuery = z.infer<typeof callbackQuery>;
 export type LoginQuery = z.infer<typeof loginQuery>;
 export type PreferencesBody = z.infer<typeof preferencesBody>;
 export type ConditionBody = z.infer<typeof conditionBody>;
+export type ItemMetaBody = z.infer<typeof itemMetaBody>;
 export type UsernameParams = z.infer<typeof usernameParams>;
 export type ReleaseBody = z.infer<typeof releaseBody>;
 export type UsernameReleaseParams = z.infer<typeof usernameReleaseParams>;

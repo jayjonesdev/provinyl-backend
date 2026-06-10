@@ -19,6 +19,12 @@ const mocks = vi.hoisted(() => ({
   },
   appClient: { getAllPublicCollection: vi.fn(), getRelease: vi.fn(), searchDatabase: vi.fn() },
   User: { findById: vi.fn(), findOneAndUpdate: vi.fn() },
+  CollectionItemMeta: {
+    find: vi.fn(),
+    findOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    deleteMany: vi.fn(),
+  },
   tokenService: {
     findRefreshToken: vi.fn(),
     storeRefreshToken: vi.fn(),
@@ -33,6 +39,7 @@ vi.mock('./services/discogsService', () => ({
   createAppClient: () => mocks.appClient,
 }));
 vi.mock('./models/User', () => ({ User: mocks.User }));
+vi.mock('./models/CollectionItemMeta', () => ({ CollectionItemMeta: mocks.CollectionItemMeta }));
 vi.mock('./services/tokenService', () => ({ default: mocks.tokenService }));
 
 import { createApp } from './app';
@@ -104,6 +111,9 @@ beforeEach(() => {
   mocks.User.findById.mockResolvedValue(fakeUser);
   // Default: no custom grade fields (most tests don't care); overridden where needed.
   mocks.userClient.getCollectionFields.mockResolvedValue({ fields: [] });
+  // Default: no per-item meta. find(...).select(...).lean() → []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mocks.CollectionItemMeta.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([]) }) } as any);
 });
 
 describe('infrastructure', () => {
@@ -217,6 +227,66 @@ describe('collection', () => {
     const res = await authedGet('/api/v1/collection/me');
     expect(res.status).toBe(200);
     expect(res.body[0].condition).toEqual({ media: 'Near Mint (NM or M-)', sleeve: 'Very Good (VG)' });
+  });
+
+  it('GET overlays the owner stated value onto Release.value', async () => {
+    mocks.userClient.getAllCollection.mockResolvedValue([collectionItem]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mocks.CollectionItemMeta.find.mockReturnValue({
+      select: () => ({ lean: () => Promise.resolve([{ releaseId: 305571, value: { amount: 250, currency: 'USD' } }]) }),
+    } as any);
+    const res = await authedGet('/api/v1/collection/me');
+    expect(res.status).toBe(200);
+    expect(res.body[0].value).toBe(250);
+  });
+});
+
+describe('collection item meta (value / cost basis)', () => {
+  it('GET returns the stored meta', async () => {
+    const doc = { userId: 'user-1', releaseId: 305571, value: { amount: 250, currency: 'USD' } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mocks.CollectionItemMeta.findOne.mockReturnValue({ lean: () => Promise.resolve(doc) } as any);
+    const res = await authedGet('/api/v1/collection/me/305571/meta');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ releaseId: 305571, value: { amount: 250, currency: 'USD' } });
+  });
+
+  it('GET returns null when no meta is set', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mocks.CollectionItemMeta.findOne.mockReturnValue({ lean: () => Promise.resolve(null) } as any);
+    const res = await authedGet('/api/v1/collection/me/305571/meta');
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+  });
+
+  it('POST upserts and returns the meta', async () => {
+    const doc = { userId: 'user-1', releaseId: 305571, value: { amount: 250, currency: 'USD' } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mocks.CollectionItemMeta.findOneAndUpdate.mockReturnValue({ lean: () => Promise.resolve(doc) } as any);
+    const res = await authedMutate('post', '/api/v1/collection/me/305571/meta').send({ value: { amount: 250, currency: 'usd' } });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ value: { amount: 250, currency: 'USD' } });
+    const [filter] = mocks.CollectionItemMeta.findOneAndUpdate.mock.calls[0];
+    expect(filter).toMatchObject({ userId: 'user-1', releaseId: 305571, instanceId: null });
+  });
+
+  it('POST with an empty body → 400', async () => {
+    const res = await authedMutate('post', '/api/v1/collection/me/305571/meta').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation_error');
+  });
+
+  it('DELETE clears the meta → 204', async () => {
+    mocks.CollectionItemMeta.deleteMany.mockResolvedValue({ deletedCount: 1 });
+    const res = await authedMutate('delete', '/api/v1/collection/me/305571/meta');
+    expect(res.status).toBe(204);
+    expect(mocks.CollectionItemMeta.deleteMany).toHaveBeenCalledWith({ userId: 'user-1', releaseId: 305571 });
+  });
+
+  it('POST to another user\'s collection → 403', async () => {
+    const res = await authedMutate('post', '/api/v1/collection/someone-else/305571/meta').send({ value: { amount: 10, currency: 'USD' } });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('forbidden');
   });
 });
 
