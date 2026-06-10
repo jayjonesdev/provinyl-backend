@@ -19,8 +19,8 @@ import { encrypt } from '../utils/crypto';
 import { createUserClient } from '../services/discogsService';
 import { fail } from '../utils/httpError';
 import { User } from '../models/User';
-import { AuthRequest } from '../types';
-import type { CallbackQuery } from '../validators';
+import { AuthRequest, IUserPreferences } from '../types';
+import type { CallbackQuery, PreferencesBody } from '../validators';
 
 // ─── GET /api/v1/auth/login ───────────────────────────────────────────────────
 export async function login(_req: Request, res: Response): Promise<void> {
@@ -100,9 +100,34 @@ export async function me(req: AuthRequest, res: Response): Promise<void> {
       fail(res, 401, 'unauthorized', 'Unauthorized');
       return;
     }
-    res.json({ username: user.username, avatar_url: user.avatarUrl });
+    res.json({
+      username: user.username,
+      avatar_url: user.avatarUrl,
+      preferences: user.preferences ?? null,
+    });
   } catch (err) {
     logger.error({ err }, 'Failed to get user info');
+    fail(res, 500, 'internal_error', 'Internal server error');
+  }
+}
+
+// ─── POST /api/v1/auth/me/preferences ─────────────────────────────────────────
+// Merges the posted (validated, partial) display prefs into the user's stored
+// preferences and returns the merged result. The SPA syncs usePrefs here.
+export async function updatePreferences(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const user = req.user;
+    if (!user) {
+      fail(res, 401, 'unauthorized', 'Unauthorized');
+      return;
+    }
+    const patch = req.valid!.body as PreferencesBody;
+    const merged: IUserPreferences = { ...(user.preferences ?? {}), ...patch };
+    user.preferences = merged;
+    await user.save();
+    res.json({ preferences: merged });
+  } catch (err) {
+    logger.error({ err }, 'Failed to update preferences');
     fail(res, 500, 'internal_error', 'Internal server error');
   }
 }

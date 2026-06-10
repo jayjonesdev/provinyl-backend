@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { login, callback, me, refresh, logout } from '../handlers/authHandler';
-import { getCollection, addToCollection, removeFromCollection, getCollectionValue } from '../handlers/collectionHandler';
+import { login, callback, me, refresh, logout, updatePreferences } from '../handlers/authHandler';
+import { getCollection, addToCollection, removeFromCollection, getCollectionValue, setCondition } from '../handlers/collectionHandler';
 import { getRelease } from '../handlers/releaseHandler';
 import { search } from '../handlers/searchHandler';
 import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from '../handlers/wantlistHandler';
@@ -16,6 +16,8 @@ import {
   releaseParams,
   releaseQuery,
   searchQuery,
+  preferencesBody,
+  conditionBody,
 } from '../validators';
 
 const router: Router = Router();
@@ -34,6 +36,7 @@ router.get('/auth/csrf', (req: Request, res: Response) => {
 router.get('/auth/login', login);
 router.get('/auth/callback', validate({ query: callbackQuery }), callback);
 router.get('/auth/me', requireAuth, me);
+router.post('/auth/me/preferences', requireAuth, validate({ body: preferencesBody }), updatePreferences);
 router.post('/auth/refresh', refresh);
 router.post('/auth/logout', logout);
 
@@ -41,6 +44,7 @@ router.post('/auth/logout', logout);
 router.get('/collection/:username', requireAuth, validate({ params: usernameParams }), getCollection);
 router.get('/collection/:username/value', requireAuth, validate({ params: usernameParams }), getCollectionValue);
 router.post('/collection/:username', requireAuth, validate({ params: usernameParams, body: releaseBody }), addToCollection);
+router.post('/collection/:username/:releaseId/condition', requireAuth, validate({ params: usernameReleaseParams, body: conditionBody }), setCondition);
 router.delete('/collection/:username/:releaseId', requireAuth, validate({ params: usernameReleaseParams }), removeFromCollection);
 
 // Wantlist

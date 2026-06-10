@@ -62,13 +62,33 @@ export interface DiscogsBasicInformation {
   styles: string[];
 }
 
+/** A custom-field value on a collection instance (e.g. Media/Sleeve Condition). */
+export interface DiscogsInstanceField {
+  field_id: number;
+  value: string;
+}
+
 export interface DiscogsCollectionRelease {
   id: number;
   instance_id: number;
   date_added: string;
   folder_id: number;
   rating: number;
+  /** Per-instance custom-field values (present when the instance has any). */
+  notes?: DiscogsInstanceField[];
   basic_information: DiscogsBasicInformation;
+}
+
+/** A collection custom-field definition. GET /users/{u}/collection/fields. */
+export interface DiscogsCollectionFieldDef {
+  id: number;
+  name: string;
+  type: string;
+  options?: string[];
+}
+
+export interface DiscogsCollectionFieldsResponse {
+  fields: DiscogsCollectionFieldDef[];
 }
 
 export interface DiscogsCollectionResponse {

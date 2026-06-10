@@ -71,6 +71,7 @@ declare module 'disconnect' {
     user(): UserResource;
     getIdentity(callback: Callback): void;
     get(path: string, callback: Callback): void;
+    post(options: string | { url: string; authLevel?: number }, data: unknown, callback: Callback): void;
   }
 
   interface Database {

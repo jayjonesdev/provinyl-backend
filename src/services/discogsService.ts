@@ -14,12 +14,14 @@ import {
   DiscogsIdentity,
   DiscogsProfile,
   DiscogsReleaseInstancesResponse,
+  DiscogsCollectionFieldsResponse,
 } from '../types/discogs.types';
 import type { IUser } from '../types';
 
 // Cache TTLs: release details are effectively immutable; searches change rarely.
 const RELEASE_TTL_MS = 60 * 60 * 1000; // 1h
 const SEARCH_TTL_MS = 5 * 60 * 1000; // 5m
+const FIELDS_TTL_MS = 10 * 60 * 1000; // 10m — custom-field defs change rarely
 
 // All-pages aggregation bounds.
 const PER_PAGE = 100;
@@ -112,6 +114,30 @@ export function createUserClient(accessToken: string, accessTokenSecret: string)
       return call<DiscogsReleaseInstancesResponse>((cb) =>
         client.get(`/users/${username}/collection/releases/${releaseId}`, cb),
       );
+    },
+
+    /** The user's collection custom-field definitions (incl. Media/Sleeve Condition). */
+    getCollectionFields(username: string): Promise<DiscogsCollectionFieldsResponse> {
+      return cached(`fields:${username}`, FIELDS_TTL_MS, () =>
+        call<DiscogsCollectionFieldsResponse>((cb) =>
+          client.get(`/users/${encodeURIComponent(username)}/collection/fields`, cb),
+        ),
+      );
+    },
+
+    /** Set a custom-field value on one instance. Discogs takes `value` as a query param. */
+    setInstanceField(
+      username: string,
+      folderId: number,
+      releaseId: number,
+      instanceId: number,
+      fieldId: number,
+      value: string,
+    ): Promise<unknown> {
+      const url =
+        `/users/${encodeURIComponent(username)}/collection/folders/${folderId}` +
+        `/releases/${releaseId}/instances/${instanceId}/fields/${fieldId}?value=${encodeURIComponent(value)}`;
+      return call<unknown>((cb) => client.post({ url, authLevel: 2 }, null, cb));
     },
 
     addToCollection(username: string, releaseId: number): Promise<unknown> {

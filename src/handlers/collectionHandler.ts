@@ -1,10 +1,10 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { createUserClientFor, createAppClient } from '../services/discogsService';
-import { collectionItemToRelease, releaseToRelease } from '../utils/toRelease';
+import { collectionItemToRelease, gradeFieldIdsFrom, releaseToRelease } from '../utils/toRelease';
 import { fail } from '../utils/httpError';
 import logger from '../utils/logger';
-import type { UsernameParams, ReleaseBody, UsernameReleaseParams } from '../validators';
+import type { UsernameParams, ReleaseBody, UsernameReleaseParams, ConditionBody } from '../validators';
 
 // GET /api/v1/collection/:username → Release[] (all pages, aggregated server-side)
 export async function getCollection(req: AuthRequest, res: Response): Promise<void> {
@@ -12,15 +12,80 @@ export async function getCollection(req: AuthRequest, res: Response): Promise<vo
     const { username } = req.valid!.params as UsernameParams;
     const isOwner = req.user?.username === username;
 
-    const releases =
-      isOwner && req.user
-        ? await createUserClientFor(req.user).getAllCollection(username)
-        : await createAppClient().getAllPublicCollection(username); // public — app-level creds
+    if (isOwner && req.user) {
+      const client = createUserClientFor(req.user);
+      // Fetch the collection and the user's grade field defs together; the fields
+      // call is non-fatal (no grading set up → conditions just stay ungraded).
+      const [releases, fields] = await Promise.all([
+        client.getAllCollection(username),
+        client.getCollectionFields(username).catch(() => ({ fields: [] })),
+      ]);
+      const ids = gradeFieldIdsFrom(fields.fields);
+      res.json(releases.map((r) => collectionItemToRelease(r, ids)));
+      return;
+    }
 
-    res.json(releases.map(collectionItemToRelease));
+    // Public collection — app-level creds, no per-instance grades.
+    const releases = await createAppClient().getAllPublicCollection(username);
+    res.json(releases.map((r) => collectionItemToRelease(r)));
   } catch (err) {
     logger.error({ err }, 'Failed to fetch collection');
     fail(res, 502, 'discogs_error', 'Failed to fetch collection from Discogs');
+  }
+}
+
+// POST /api/v1/collection/:username/:releaseId/condition  body: { media?, sleeve?, instanceId? }
+// Sets Media/Sleeve grading on an owned copy via Discogs collection custom fields.
+export async function setCondition(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { username, releaseId } = req.valid!.params as UsernameReleaseParams;
+    const { media, sleeve, instanceId } = req.valid!.body as ConditionBody;
+
+    if (req.user?.username !== username) {
+      fail(res, 403, 'forbidden', 'Forbidden');
+      return;
+    }
+
+    const client = createUserClientFor(req.user);
+
+    // Resolve the target copy (instance + folder) and the grade field ids.
+    const [{ releases: instances }, { fields }] = await Promise.all([
+      client.getReleaseInstances(username, releaseId),
+      client.getCollectionFields(username),
+    ]);
+    if (!instances || instances.length === 0) {
+      fail(res, 404, 'not_found', 'Release not in collection');
+      return;
+    }
+    const target = (instanceId && instances.find((i) => i.instance_id === instanceId)) || instances[0];
+    const ids = gradeFieldIdsFrom(fields);
+
+    if ((media !== undefined && ids.media == null) || (sleeve !== undefined && ids.sleeve == null)) {
+      fail(res, 422, 'grading_unavailable', 'No Media/Sleeve Condition field in your Discogs collection');
+      return;
+    }
+
+    const writes: Promise<unknown>[] = [];
+    if (media !== undefined) {
+      writes.push(
+        client.setInstanceField(username, target.folder_id, releaseId, target.instance_id, ids.media!, media),
+      );
+    }
+    if (sleeve !== undefined) {
+      writes.push(
+        client.setInstanceField(username, target.folder_id, releaseId, target.instance_id, ids.sleeve!, sleeve),
+      );
+    }
+    await Promise.all(writes);
+
+    // Echo back what changed ('' → "—" for display); the client merges into its row.
+    const condition: { media?: string; sleeve?: string } = {};
+    if (media !== undefined) condition.media = media || '—';
+    if (sleeve !== undefined) condition.sleeve = sleeve || '—';
+    res.json({ condition });
+  } catch (err) {
+    logger.error({ err }, 'Failed to set condition');
+    fail(res, 502, 'discogs_error', 'Failed to update grading on Discogs');
   }
 }
 

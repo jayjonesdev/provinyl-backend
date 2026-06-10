@@ -12,12 +12,24 @@ declare global {
   }
 }
 
+/** Display/UI preferences synced from the SPA (mirrors provinyl-web usePrefs). */
+export interface IUserPreferences {
+  theme?: 'light' | 'dark';
+  density?: 'comfortable' | 'cozy' | 'compact';
+  cardStyle?: 'gallery' | 'flat' | 'frame';
+  radius?: number;
+  showStrip?: boolean;
+  sort?: 'added' | 'artist' | 'title' | 'year' | 'value' | 'rating';
+  lastList?: 'collection' | 'wantlist';
+}
+
 export interface IUser extends Document {
   username: string;
   avatarUrl: string;
   discogsAccessToken: string;
   discogsAccessTokenSecret: string;
   isActive: boolean;
+  preferences?: IUserPreferences;
   createdAt: Date;
   updatedAt: Date;
 }

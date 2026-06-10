@@ -9,20 +9,50 @@
 
 import type {
   DiscogsArtist,
+  DiscogsCollectionFieldDef,
   DiscogsCollectionRelease,
   DiscogsFormat,
+  DiscogsInstanceField,
   DiscogsLabel,
   DiscogsPagination,
   DiscogsRelease,
   DiscogsSearchResult,
   DiscogsWantlistItem,
 } from '../types/discogs.types';
-import type { Credit, Format, Label, ListKind, Release, Track, Video } from '../types/release';
+import type { Condition, Credit, Format, Label, ListKind, Release, Track, Video } from '../types/release';
 import type { Pagination } from '../types/responses';
 import { artForId } from './coverFallback';
 
 const UNGRADED = '—';
 const EMPTY_CONDITION = { media: UNGRADED, sleeve: UNGRADED };
+
+/** The custom-field ids that hold Media/Sleeve grading for a user's collection. */
+export interface GradeFieldIds {
+  media?: number;
+  sleeve?: number;
+}
+
+/** Map collection field definitions to the Media/Sleeve Condition field ids. */
+export function gradeFieldIdsFrom(fields: DiscogsCollectionFieldDef[] | undefined): GradeFieldIds {
+  const ids: GradeFieldIds = {};
+  for (const f of fields ?? []) {
+    const name = f.name.toLowerCase();
+    if (name.includes('media')) ids.media = f.id;
+    else if (name.includes('sleeve')) ids.sleeve = f.id;
+  }
+  return ids;
+}
+
+/** Read an instance's grade values from its custom-field notes. */
+function readCondition(notes: DiscogsInstanceField[] | undefined, ids: GradeFieldIds | undefined): Condition {
+  if (!notes || !ids) return { ...EMPTY_CONDITION };
+  const valueOf = (fieldId?: number): string =>
+    fieldId == null ? '' : (notes.find((n) => n.field_id === fieldId)?.value ?? '');
+  return {
+    media: valueOf(ids.media) || UNGRADED,
+    sleeve: valueOf(ids.sleeve) || UNGRADED,
+  };
+}
 
 /** Join Discogs artists into a single display string, honoring `join` connectors. */
 export function joinArtists(artists: DiscogsArtist[] | undefined): string {
@@ -61,8 +91,12 @@ export function mapPagination(p: DiscogsPagination): Pagination {
   return { page: p.page, pages: p.pages, per_page: p.per_page, items: p.items };
 }
 
-/** Collection list item → Release (list-level fields only). */
-export function collectionItemToRelease(item: DiscogsCollectionRelease): Release {
+/** Collection list item → Release (list-level fields only). Pass the user's grade
+ * field ids to surface Media/Sleeve condition from the instance's custom fields. */
+export function collectionItemToRelease(
+  item: DiscogsCollectionRelease,
+  gradeFieldIds?: GradeFieldIds,
+): Release {
   const bi = item.basic_information;
   return {
     id: item.id,
@@ -87,7 +121,7 @@ export function collectionItemToRelease(item: DiscogsCollectionRelease): Release
     notes: '',
     art: artForId(item.id),
     value: 0,
-    condition: { ...EMPTY_CONDITION },
+    condition: readCondition(item.notes, gradeFieldIds),
     dateAdded: (item.date_added ?? '').slice(0, 10),
     list: 'collection',
     coverImage: bi.cover_image ?? '',

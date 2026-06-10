@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
     addToWantlist: vi.fn(),
     removeFromWantlist: vi.fn(),
     getCollectionValue: vi.fn(),
+    getCollectionFields: vi.fn(),
+    setInstanceField: vi.fn(),
   },
   appClient: { getAllPublicCollection: vi.fn(), getRelease: vi.fn(), searchDatabase: vi.fn() },
   User: { findById: vi.fn(), findOneAndUpdate: vi.fn() },
@@ -100,6 +102,8 @@ const discogsRelease = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.User.findById.mockResolvedValue(fakeUser);
+  // Default: no custom grade fields (most tests don't care); overridden where needed.
+  mocks.userClient.getCollectionFields.mockResolvedValue({ fields: [] });
 });
 
 describe('infrastructure', () => {
@@ -199,6 +203,86 @@ describe('collection', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ minimum: '$10.00', median: '$20.00', maximum: '$30.00' });
   });
+
+  it('GET maps Media/Sleeve grades from instance custom fields', async () => {
+    mocks.userClient.getCollectionFields.mockResolvedValue({
+      fields: [
+        { id: 1, name: 'Media Condition', type: 'dropdown' },
+        { id: 2, name: 'Sleeve Condition', type: 'dropdown' },
+      ],
+    });
+    mocks.userClient.getAllCollection.mockResolvedValue([
+      { ...collectionItem, notes: [{ field_id: 1, value: 'Near Mint (NM or M-)' }, { field_id: 2, value: 'Very Good (VG)' }] },
+    ]);
+    const res = await authedGet('/api/v1/collection/me');
+    expect(res.status).toBe(200);
+    expect(res.body[0].condition).toEqual({ media: 'Near Mint (NM or M-)', sleeve: 'Very Good (VG)' });
+  });
+});
+
+describe('collection condition (grading)', () => {
+  beforeEach(() => {
+    mocks.userClient.getReleaseInstances.mockResolvedValue({
+      releases: [{ id: 305571, instance_id: 7, folder_id: 1 }],
+    });
+    mocks.userClient.getCollectionFields.mockResolvedValue({
+      fields: [
+        { id: 1, name: 'Media Condition', type: 'dropdown' },
+        { id: 2, name: 'Sleeve Condition', type: 'dropdown' },
+      ],
+    });
+    mocks.userClient.setInstanceField.mockResolvedValue({});
+  });
+
+  it('POST sets media + sleeve on the resolved instance', async () => {
+    const res = await authedMutate('post', '/api/v1/collection/me/305571/condition').send({
+      media: 'Mint (M)',
+      sleeve: 'Very Good Plus (VG+)',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.condition).toEqual({ media: 'Mint (M)', sleeve: 'Very Good Plus (VG+)' });
+    expect(mocks.userClient.setInstanceField).toHaveBeenCalledWith('me', 1, 305571, 7, 1, 'Mint (M)');
+    expect(mocks.userClient.setInstanceField).toHaveBeenCalledWith('me', 1, 305571, 7, 2, 'Very Good Plus (VG+)');
+  });
+
+  it('clears a grade with empty string → "—"', async () => {
+    const res = await authedMutate('post', '/api/v1/collection/me/305571/condition').send({ media: '' });
+    expect(res.status).toBe(200);
+    expect(res.body.condition).toEqual({ media: '—' });
+    expect(mocks.userClient.setInstanceField).toHaveBeenCalledWith('me', 1, 305571, 7, 1, '');
+  });
+
+  it('ownership mismatch → 403', async () => {
+    const res = await authedMutate('post', '/api/v1/collection/someone/305571/condition').send({ media: 'Mint (M)' });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('forbidden');
+  });
+
+  it('invalid grade → 400', async () => {
+    const res = await authedMutate('post', '/api/v1/collection/me/305571/condition').send({ media: 'Scratched' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation_error');
+  });
+
+  it('empty body (no media/sleeve) → 400', async () => {
+    const res = await authedMutate('post', '/api/v1/collection/me/305571/condition').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation_error');
+  });
+
+  it('release not in collection → 404', async () => {
+    mocks.userClient.getReleaseInstances.mockResolvedValue({ releases: [] });
+    const res = await authedMutate('post', '/api/v1/collection/me/305571/condition').send({ media: 'Mint (M)' });
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('not_found');
+  });
+
+  it('no grading field set up in Discogs → 422', async () => {
+    mocks.userClient.getCollectionFields.mockResolvedValue({ fields: [] });
+    const res = await authedMutate('post', '/api/v1/collection/me/305571/condition').send({ media: 'Mint (M)' });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('grading_unavailable');
+  });
 });
 
 describe('refresh rotation', () => {
@@ -230,5 +314,50 @@ describe('refresh rotation', () => {
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('token_reuse');
     expect(mocks.tokenService.revokeFamilyTokens).toHaveBeenCalled();
+  });
+});
+
+describe('preferences', () => {
+  it('GET /auth/me returns preferences (null when unset)', async () => {
+    const res = await authedGet('/api/v1/auth/me');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ username: 'me', avatar_url: '', preferences: null });
+  });
+
+  it('POST /auth/me/preferences merges the patch into stored prefs and saves', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const user = { ...fakeUser, preferences: { theme: 'light', density: 'cozy' }, save };
+    mocks.User.findById.mockResolvedValue(user);
+
+    const res = await authedMutate('post', '/api/v1/auth/me/preferences').send({
+      theme: 'dark',
+      cardStyle: 'frame',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.preferences).toEqual({ theme: 'dark', density: 'cozy', cardStyle: 'frame' });
+    expect(save).toHaveBeenCalledOnce();
+    expect(user.preferences).toEqual({ theme: 'dark', density: 'cozy', cardStyle: 'frame' });
+  });
+
+  it('rejects an invalid enum value → 400', async () => {
+    const res = await authedMutate('post', '/api/v1/auth/me/preferences').send({ theme: 'neon' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation_error');
+  });
+
+  it('rejects unknown keys (strict) → 400', async () => {
+    const res = await authedMutate('post', '/api/v1/auth/me/preferences').send({ hacker: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation_error');
+  });
+
+  it('requires CSRF → 403', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/me/preferences')
+      .set('Cookie', [`pv_access=${tokens().accessToken}`, `pv_csrf=${CSRF}`])
+      .send({ theme: 'dark' });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('csrf_invalid');
   });
 });
