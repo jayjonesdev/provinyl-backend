@@ -25,6 +25,24 @@ const mocks = vi.hoisted(() => ({
     findOneAndUpdate: vi.fn(),
     deleteMany: vi.fn(),
   },
+  Photo: {
+    countDocuments: vi.fn(),
+    create: vi.fn(),
+    find: vi.fn(),
+    findById: vi.fn(),
+  },
+  storage: {
+    isStorageConfigured: vi.fn(),
+    presignPut: vi.fn(),
+    presignGet: vi.fn(),
+    getObject: vi.fn(),
+    putObject: vi.fn(),
+    deleteObject: vi.fn(),
+  },
+  image: {
+    sniffImageType: vi.fn(),
+    processImage: vi.fn(),
+  },
   tokenService: {
     findRefreshToken: vi.fn(),
     storeRefreshToken: vi.fn(),
@@ -40,6 +58,9 @@ vi.mock('./services/discogsService', () => ({
 }));
 vi.mock('./models/User', () => ({ User: mocks.User }));
 vi.mock('./models/CollectionItemMeta', () => ({ CollectionItemMeta: mocks.CollectionItemMeta }));
+vi.mock('./models/Photo', () => ({ Photo: mocks.Photo }));
+vi.mock('./services/storageService', () => mocks.storage);
+vi.mock('./services/imageService', () => mocks.image);
 vi.mock('./services/tokenService', () => ({ default: mocks.tokenService }));
 
 import { createApp } from './app';
@@ -116,6 +137,18 @@ beforeEach(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chain: any = { select: () => chain, lean: () => Promise.resolve([]) };
   mocks.CollectionItemMeta.find.mockReturnValue(chain);
+
+  // Storage + image defaults (overridden per test).
+  mocks.storage.isStorageConfigured.mockReturnValue(true);
+  mocks.storage.presignPut.mockResolvedValue('https://bucket.example/put?sig');
+  mocks.storage.presignGet.mockResolvedValue('https://bucket.example/get?sig');
+  mocks.storage.getObject.mockResolvedValue(Buffer.from([0xff, 0xd8, 0xff, 0, 0, 0]));
+  mocks.storage.putObject.mockResolvedValue(undefined);
+  mocks.storage.deleteObject.mockResolvedValue(undefined);
+  mocks.image.sniffImageType.mockReturnValue('image/jpeg');
+  mocks.image.processImage.mockResolvedValue({
+    full: Buffer.from('full'), thumb: Buffer.from('thumb'), width: 800, height: 800, contentType: 'image/jpeg',
+  });
 });
 
 describe('infrastructure', () => {
@@ -315,6 +348,94 @@ describe('export (appraisal PDF)', () => {
   it('requires auth → 401', async () => {
     const res = await request(app).get('/api/v1/export/appraisal.pdf');
     expect(res.status).toBe(401);
+  });
+});
+
+describe('photos (custom item images)', () => {
+  it('POST /photos/upload-url → 201 with a presigned URL', async () => {
+    mocks.Photo.countDocuments.mockResolvedValue(0);
+    mocks.Photo.create.mockResolvedValue({ id: 'aaaaaaaaaaaaaaaaaaaaaaaa', storageKey: 'users/user-1/photos/x.jpg' });
+    const res = await authedMutate('post', '/api/v1/photos/upload-url')
+      .send({ releaseId: 305571, kind: 'sleeve', contentType: 'image/jpeg', sizeBytes: 12345 });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ photoId: 'aaaaaaaaaaaaaaaaaaaaaaaa', uploadUrl: expect.stringContaining('http') });
+  });
+
+  it('POST /photos/upload-url over the per-item cap → 422', async () => {
+    mocks.Photo.countDocuments.mockResolvedValueOnce(10).mockResolvedValueOnce(8); // user, item
+    const res = await authedMutate('post', '/api/v1/photos/upload-url')
+      .send({ releaseId: 305571, contentType: 'image/jpeg', sizeBytes: 100 });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('photo_limit');
+  });
+
+  it('POST /photos/upload-url with an unsupported type → 400', async () => {
+    const res = await authedMutate('post', '/api/v1/photos/upload-url')
+      .send({ releaseId: 305571, contentType: 'image/gif', sizeBytes: 100 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation_error');
+  });
+
+  it('upload-url returns 503 when storage is not configured', async () => {
+    mocks.storage.isStorageConfigured.mockReturnValue(false);
+    const res = await authedMutate('post', '/api/v1/photos/upload-url')
+      .send({ releaseId: 305571, contentType: 'image/jpeg', sizeBytes: 100 });
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('storage_unavailable');
+  });
+
+  it('POST /photos/:id/confirm validates, re-encodes, and marks ready', async () => {
+    const doc: Record<string, unknown> = {
+      id: 'aaaaaaaaaaaaaaaaaaaaaaaa', userId: 'user-1', status: 'pending',
+      storageKey: 'users/user-1/photos/x.jpg', thumbKey: 'users/user-1/photos/x_thumb.jpg',
+      save: vi.fn().mockResolvedValue(undefined), deleteOne: vi.fn(),
+    };
+    mocks.Photo.findById.mockResolvedValue(doc);
+    const res = await authedMutate('post', '/api/v1/photos/aaaaaaaaaaaaaaaaaaaaaaaa/confirm');
+    expect(res.status).toBe(200);
+    expect(mocks.image.processImage).toHaveBeenCalled();
+    expect(mocks.storage.putObject).toHaveBeenCalledTimes(2); // full + thumb
+    expect(doc.status).toBe('ready');
+  });
+
+  it('confirm rejects a non-image (bad magic bytes) → 422 and cleans up', async () => {
+    mocks.image.sniffImageType.mockReturnValue(null);
+    const deleteOne = vi.fn().mockResolvedValue(undefined);
+    mocks.Photo.findById.mockResolvedValue({
+      id: 'aaaaaaaaaaaaaaaaaaaaaaaa', userId: 'user-1', status: 'pending',
+      storageKey: 'users/user-1/photos/x.jpg', thumbKey: 'users/user-1/photos/x_thumb.jpg', deleteOne,
+    });
+    const res = await authedMutate('post', '/api/v1/photos/aaaaaaaaaaaaaaaaaaaaaaaa/confirm');
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('invalid_image');
+    expect(deleteOne).toHaveBeenCalled();
+  });
+
+  it('GET /photos returns ready photos with signed URLs', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mocks.Photo.find.mockReturnValue({ sort: () => ({ lean: () => Promise.resolve([
+      { _id: 'p1', userId: 'user-1', releaseId: 305571, storageKey: 'k.jpg', thumbKey: 't.jpg', status: 'ready' },
+    ]) }) } as any);
+    const res = await authedGet('/api/v1/photos?releaseId=305571');
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toMatchObject({ url: expect.stringContaining('http'), thumbUrl: expect.stringContaining('http') });
+  });
+
+  it('DELETE /photos/:id removes objects + doc → 204', async () => {
+    const deleteOne = vi.fn().mockResolvedValue(undefined);
+    mocks.Photo.findById.mockResolvedValue({
+      userId: 'user-1', storageKey: 'k.jpg', thumbKey: 't.jpg', deleteOne,
+    });
+    const res = await authedMutate('delete', '/api/v1/photos/aaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(res.status).toBe(204);
+    expect(mocks.storage.deleteObject).toHaveBeenCalledTimes(2);
+    expect(deleteOne).toHaveBeenCalled();
+  });
+
+  it('DELETE another user\'s photo → 404', async () => {
+    mocks.Photo.findById.mockResolvedValue({ userId: 'someone-else', storageKey: 'k.jpg' });
+    const res = await authedMutate('delete', '/api/v1/photos/aaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(res.status).toBe(404);
   });
 });
 

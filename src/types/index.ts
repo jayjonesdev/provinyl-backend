@@ -66,6 +66,26 @@ export interface ICollectionItemMeta extends Document {
   updatedAt: Date;
 }
 
+export type PhotoKind = 'sleeve' | 'vinyl' | 'signature' | 'receipt' | 'other';
+
+/** A user-uploaded photo of an owned copy. The image bytes live in object
+ * storage (keys namespaced by userId); this is just the metadata + keys. */
+export interface IPhoto extends Document {
+  userId: string;
+  releaseId: number;
+  instanceId?: number;
+  kind: PhotoKind;
+  storageKey: string;
+  thumbKey?: string;
+  contentType: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+  status: 'pending' | 'ready';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;

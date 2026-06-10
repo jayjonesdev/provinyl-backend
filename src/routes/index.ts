@@ -3,6 +3,7 @@ import { login, callback, me, refresh, logout, updatePreferences } from '../hand
 import { getCollection, addToCollection, removeFromCollection, getCollectionValue, setCondition } from '../handlers/collectionHandler';
 import { getItemMeta, setItemMeta, deleteItemMeta } from '../handlers/itemMetaHandler';
 import { exportAppraisal } from '../handlers/exportHandler';
+import { createUploadUrl, confirmUpload, listPhotos, getPhotoUrl, deletePhoto } from '../handlers/photoHandler';
 import { getRelease } from '../handlers/releaseHandler';
 import { search } from '../handlers/searchHandler';
 import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from '../handlers/wantlistHandler';
@@ -23,6 +24,9 @@ import {
   conditionBody,
   itemMetaBody,
   exportQuery,
+  uploadUrlBody,
+  photoIdParams,
+  photoListQuery,
 } from '../validators';
 
 const router: Router = Router();
@@ -70,5 +74,12 @@ router.get('/search', requireAuth, validate({ query: searchQuery }), search);
 
 // Export — branded appraisal PDF of the authed user's collection
 router.get('/export/appraisal.pdf', requireAuth, validate({ query: exportQuery }), exportAppraisal);
+
+// Photos — custom item images (object storage; ownership-checked)
+router.post('/photos/upload-url', requireAuth, validate({ body: uploadUrlBody }), createUploadUrl);
+router.post('/photos/:id/confirm', requireAuth, validate({ params: photoIdParams }), confirmUpload);
+router.get('/photos', requireAuth, validate({ query: photoListQuery }), listPhotos);
+router.get('/photos/:id/url', requireAuth, validate({ params: photoIdParams }), getPhotoUrl);
+router.delete('/photos/:id', requireAuth, validate({ params: photoIdParams }), deletePhoto);
 
 export default router;

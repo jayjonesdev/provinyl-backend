@@ -25,6 +25,14 @@ const envSchema = z.object({
   TOKEN_ENC_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, 'TOKEN_ENC_KEY must be 64 hex characters (32 bytes)'),
+  // Object storage (Cloudflare R2 / any S3-compatible) for custom item images.
+  // All optional — when unset, the photo endpoints return 503 and the rest of
+  // the app runs normally.
+  R2_ENDPOINT: z.string().url().optional(),
+  R2_BUCKET: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  R2_REGION: z.string().default('auto'),
 });
 
 const parsed = envSchema.safeParse(process.env);

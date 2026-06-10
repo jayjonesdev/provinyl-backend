@@ -87,6 +87,21 @@ export const itemMetaBody = z
     { message: 'Provide at least one of value, purchasePrice, purchaseDate, note' },
   );
 
+// ── photos (custom item images) ───────────────────────────────────────────────
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
+export const photoKind = z.enum(['sleeve', 'vinyl', 'signature', 'receipt', 'other']);
+export const uploadUrlBody = z
+  .object({
+    releaseId,
+    instanceId: z.coerce.number().int().positive().optional(),
+    kind: photoKind.optional().default('other'),
+    contentType: z.enum(['image/jpeg', 'image/png', 'image/heic']),
+    sizeBytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
+  })
+  .strict();
+export const photoIdParams = z.object({ id: z.string().regex(/^[a-f0-9]{24}$/, 'invalid id') });
+export const photoListQuery = z.object({ releaseId });
+
 // ── export (appraisal PDF) ────────────────────────────────────────────────────
 // scope=all (default) or over:<amount> to include only items at/above a value.
 export const exportQuery = z.object({
@@ -120,6 +135,9 @@ export type PreferencesBody = z.infer<typeof preferencesBody>;
 export type ConditionBody = z.infer<typeof conditionBody>;
 export type ItemMetaBody = z.infer<typeof itemMetaBody>;
 export type ExportQuery = z.infer<typeof exportQuery>;
+export type UploadUrlBody = z.infer<typeof uploadUrlBody>;
+export type PhotoIdParams = z.infer<typeof photoIdParams>;
+export type PhotoListQuery = z.infer<typeof photoListQuery>;
 export type UsernameParams = z.infer<typeof usernameParams>;
 export type ReleaseBody = z.infer<typeof releaseBody>;
 export type UsernameReleaseParams = z.infer<typeof usernameReleaseParams>;
