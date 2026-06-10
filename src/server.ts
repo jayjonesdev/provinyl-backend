@@ -7,6 +7,19 @@ import { createApp } from './app';
 
 const app = createApp();
 
+// Survive a misbehaving dependency. The `disconnect` Discogs client parses every
+// non-`<!`-prefixed body as JSON inside its own stream callback, so a transient
+// non-JSON 5xx from Discogs (e.g. "Internal Server Error") throws asynchronously,
+// outside any handler try/catch — which would otherwise crash the whole process
+// and 502 every client. Log and stay up; the offending request still fails fast
+// via the per-call Discogs timeout (see services/discogsResilience.ts).
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'Uncaught exception — server staying up');
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason }, 'Unhandled promise rejection — server staying up');
+});
+
 async function start() {
   try {
     await mongoose.connect(env.MONGO_URI);

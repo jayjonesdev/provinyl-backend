@@ -39,6 +39,17 @@ describe('runDiscogs', () => {
     expect(calls).toBe(3); // initial + 2 retries
   });
 
+  it('times out a call that never settles, then frees its slot', async () => {
+    // Mirrors the disconnect-client crash: a call whose promise never settles.
+    // The timeout must reject so the semaphore slot is released.
+    await expect(
+      runDiscogs(() => new Promise(() => {}), { timeoutMs: 20 }),
+    ).rejects.toThrow(/timed out/);
+
+    // A subsequent call still runs — proves the slot wasn't leaked.
+    expect(await runDiscogs(async () => 'ok', { timeoutMs: 20 })).toBe('ok');
+  });
+
   it('passes non-429 errors through immediately', async () => {
     let calls = 0;
     await expect(

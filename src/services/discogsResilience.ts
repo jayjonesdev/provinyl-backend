@@ -15,8 +15,25 @@ const MAX_CONCURRENT = 5;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 2000;
 const MAX_DELAY_MS = 15000;
+// Hard ceiling per Discogs call. Besides covering a slow upstream, this is what
+// rescues a request when the `disconnect` client throws synchronously inside its
+// own stream callback (e.g. JSON.parse on a non-JSON 5xx body): that throw never
+// settles our promise, so without a timeout the awaiting request would hang
+// forever and never release its semaphore slot.
+const REQUEST_TIMEOUT_MS = 15000;
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Reject if `p` hasn't settled within `ms` (clears its timer on settle). */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Discogs request timed out after ${ms}ms`)), ms);
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
 
 class Semaphore {
   private active = 0;
@@ -66,18 +83,20 @@ function backoffMs(err: unknown, attempt: number, baseDelayMs: number): number {
 export interface ResilienceOptions {
   maxRetries?: number;
   baseDelayMs?: number;
+  timeoutMs?: number;
 }
 
 /** Run a Discogs call under the concurrency cap, retrying on 429. */
 export async function runDiscogs<T>(fn: () => Promise<T>, opts: ResilienceOptions = {}): Promise<T> {
   const maxRetries = opts.maxRetries ?? MAX_RETRIES;
   const baseDelayMs = opts.baseDelayMs ?? BASE_DELAY_MS;
+  const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
   const release = await semaphore.acquire();
   try {
     let attempt = 0;
     for (;;) {
       try {
-        return await fn();
+        return await withTimeout(fn(), timeoutMs);
       } catch (err) {
         if (isRateLimited(err) && attempt < maxRetries) {
           const wait = backoffMs(err, attempt, baseDelayMs);
