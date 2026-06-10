@@ -125,7 +125,8 @@ export function createUserClient(accessToken: string, accessTokenSecret: string)
       );
     },
 
-    /** Set a custom-field value on one instance. Discogs takes `value` as a query param. */
+    /** Set a custom-field value on one instance. The value goes in the JSON body
+     * (like editRelease) — Discogs returns 422 when it's only in the query string. */
     setInstanceField(
       username: string,
       folderId: number,
@@ -136,8 +137,8 @@ export function createUserClient(accessToken: string, accessTokenSecret: string)
     ): Promise<unknown> {
       const url =
         `/users/${encodeURIComponent(username)}/collection/folders/${folderId}` +
-        `/releases/${releaseId}/instances/${instanceId}/fields/${fieldId}?value=${encodeURIComponent(value)}`;
-      return call<unknown>((cb) => client.post({ url, authLevel: 2 }, null, cb));
+        `/releases/${releaseId}/instances/${instanceId}/fields/${fieldId}`;
+      return call<unknown>((cb) => client.post({ url, authLevel: 2 }, { value }, cb));
     },
 
     addToCollection(username: string, releaseId: number): Promise<unknown> {
