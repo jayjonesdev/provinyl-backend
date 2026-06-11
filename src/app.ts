@@ -10,6 +10,7 @@ import { env } from './config/env';
 import logger from './utils/logger';
 import { VERSION } from './version';
 import router from './routes';
+import publicRouter from './routes/public';
 import { csrfMiddleware } from './middleware/csrfMiddleware';
 import { errorMiddleware, notFoundMiddleware } from './middleware/errorMiddleware';
 
@@ -28,6 +29,11 @@ export function createApp(): Express {
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', version: VERSION, uptime: process.uptime(), timestamp: Date.now() });
   });
+
+  // Public share surfaces (/u/:username, /card/:username.png) — mounted before
+  // the cookie/CSRF layer so these cacheable, crawler-facing responses carry no
+  // Set-Cookie. Read-only; mutations remain owner-only under /api/v1.
+  app.use('/', publicRouter);
 
   // Cookies + body parsing
   app.use(cookieParser());
