@@ -45,6 +45,47 @@ export interface IRefreshToken extends Document {
   createdAt: Date;
 }
 
+/** A monetary amount with an ISO-4217 currency. */
+export interface IMoney {
+  amount: number;
+  currency: string;
+}
+
+/** Owner-authored metadata for an owned copy that Discogs can't store: the
+ * user's stated value, what they paid, and a free-text note. Keyed to a Discogs
+ * release (+ optional collection instance). */
+export interface ICollectionItemMeta extends Document {
+  userId: string;
+  releaseId: number;
+  instanceId?: number;
+  value?: IMoney;
+  purchasePrice?: IMoney;
+  purchaseDate?: Date;
+  note?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type PhotoKind = 'sleeve' | 'vinyl' | 'signature' | 'receipt' | 'other';
+
+/** A user-uploaded photo of an owned copy. The image bytes live in object
+ * storage (keys namespaced by userId); this is just the metadata + keys. */
+export interface IPhoto extends Document {
+  userId: string;
+  releaseId: number;
+  instanceId?: number;
+  kind: PhotoKind;
+  storageKey: string;
+  thumbKey?: string;
+  contentType: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+  status: 'pending' | 'ready';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;

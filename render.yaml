@@ -43,3 +43,17 @@ services:
         sync: false
       - key: TOKEN_ENC_KEY # openssl rand -hex 32
         sync: false
+      # Object storage for custom item images (Cloudflare R2 / S3-compatible).
+      # All optional — leave unset to disable photos (endpoints return 503).
+      # Set these in the Render dashboard; add a bucket CORS rule allowing
+      # GET/PUT from CLIENT_ORIGIN so the web app can upload directly.
+      - key: R2_ENDPOINT # https://<account-id>.r2.cloudflarestorage.com
+        sync: false
+      - key: R2_BUCKET # provinyl-photos
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_REGION # auto (for R2)
+        sync: false

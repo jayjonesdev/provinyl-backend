@@ -4,7 +4,29 @@ import { createUserClientFor, createAppClient } from '../services/discogsService
 import { collectionItemToRelease, gradeFieldIdsFrom, releaseToRelease } from '../utils/toRelease';
 import { fail } from '../utils/httpError';
 import logger from '../utils/logger';
+import { CollectionItemMeta } from '../models/CollectionItemMeta';
+import type { Release } from '../types/release';
 import type { UsernameParams, ReleaseBody, UsernameReleaseParams, ConditionBody } from '../validators';
+
+// Overlay the owner's stated value onto the (Discogs-sourced) releases. Discogs
+// has no per-item value, so Release.value defaults to 0; this layers in the
+// user-authored figure from CollectionItemMeta in a single batched query.
+async function applyItemMeta(userId: string, releases: Release[]): Promise<void> {
+  if (releases.length === 0) return;
+  const metas = await CollectionItemMeta.find({
+    userId,
+    releaseId: { $in: releases.map((r) => r.id) },
+  })
+    .select('releaseId value')
+    .lean();
+  if (metas.length === 0) return;
+  const valueByRelease = new Map<number, number>();
+  for (const m of metas) if (m.value) valueByRelease.set(m.releaseId, m.value.amount);
+  for (const r of releases) {
+    const v = valueByRelease.get(r.id);
+    if (v !== undefined) r.value = v;
+  }
+}
 
 // GET /api/v1/collection/:username → Release[] (all pages, aggregated server-side)
 export async function getCollection(req: AuthRequest, res: Response): Promise<void> {
@@ -16,12 +38,14 @@ export async function getCollection(req: AuthRequest, res: Response): Promise<vo
       const client = createUserClientFor(req.user);
       // Fetch the collection and the user's grade field defs together; the fields
       // call is non-fatal (no grading set up → conditions just stay ungraded).
-      const [releases, fields] = await Promise.all([
+      const [raw, fields] = await Promise.all([
         client.getAllCollection(username),
         client.getCollectionFields(username).catch(() => ({ fields: [] })),
       ]);
       const ids = gradeFieldIdsFrom(fields.fields);
-      res.json(releases.map((r) => collectionItemToRelease(r, ids)));
+      const releases = raw.map((r) => collectionItemToRelease(r, ids));
+      await applyItemMeta(req.userId!, releases);
+      res.json(releases);
       return;
     }
 

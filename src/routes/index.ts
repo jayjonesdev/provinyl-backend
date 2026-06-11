@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { login, callback, me, refresh, logout, updatePreferences } from '../handlers/authHandler';
 import { getCollection, addToCollection, removeFromCollection, getCollectionValue, setCondition } from '../handlers/collectionHandler';
+import { getItemMeta, setItemMeta, deleteItemMeta } from '../handlers/itemMetaHandler';
+import { exportAppraisal } from '../handlers/exportHandler';
+import { createUploadUrl, confirmUpload, listPhotos, getPhotoUrl, deletePhoto } from '../handlers/photoHandler';
 import { getRelease } from '../handlers/releaseHandler';
 import { search } from '../handlers/searchHandler';
 import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from '../handlers/wantlistHandler';
@@ -19,6 +22,11 @@ import {
   searchQuery,
   preferencesBody,
   conditionBody,
+  itemMetaBody,
+  exportQuery,
+  uploadUrlBody,
+  photoIdParams,
+  photoListQuery,
 } from '../validators';
 
 const router: Router = Router();
@@ -46,6 +54,10 @@ router.get('/collection/:username', requireAuth, validate({ params: usernamePara
 router.get('/collection/:username/value', requireAuth, validate({ params: usernameParams }), getCollectionValue);
 router.post('/collection/:username', requireAuth, validate({ params: usernameParams, body: releaseBody }), addToCollection);
 router.post('/collection/:username/:releaseId/condition', requireAuth, validate({ params: usernameReleaseParams, body: conditionBody }), setCondition);
+// Owner-authored item metadata: stated value, cost basis, note.
+router.get('/collection/:username/:releaseId/meta', requireAuth, validate({ params: usernameReleaseParams }), getItemMeta);
+router.post('/collection/:username/:releaseId/meta', requireAuth, validate({ params: usernameReleaseParams, body: itemMetaBody }), setItemMeta);
+router.delete('/collection/:username/:releaseId/meta', requireAuth, validate({ params: usernameReleaseParams }), deleteItemMeta);
 router.delete('/collection/:username/:releaseId', requireAuth, validate({ params: usernameReleaseParams }), removeFromCollection);
 
 // Wantlist
@@ -59,5 +71,15 @@ router.get('/release/:id', validate({ params: releaseParams, query: releaseQuery
 
 // Search
 router.get('/search', requireAuth, validate({ query: searchQuery }), search);
+
+// Export — branded appraisal PDF of the authed user's collection
+router.get('/export/appraisal.pdf', requireAuth, validate({ query: exportQuery }), exportAppraisal);
+
+// Photos — custom item images (object storage; ownership-checked)
+router.post('/photos/upload-url', requireAuth, validate({ body: uploadUrlBody }), createUploadUrl);
+router.post('/photos/:id/confirm', requireAuth, validate({ params: photoIdParams }), confirmUpload);
+router.get('/photos', requireAuth, validate({ query: photoListQuery }), listPhotos);
+router.get('/photos/:id/url', requireAuth, validate({ params: photoIdParams }), getPhotoUrl);
+router.delete('/photos/:id', requireAuth, validate({ params: photoIdParams }), deletePhoto);
 
 export default router;
