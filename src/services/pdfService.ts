@@ -35,11 +35,44 @@ const REG = HAS_FONTS ? 'Sans' : 'Helvetica';
 const BOLD = HAS_FONTS ? 'Sans-Bold' : 'Helvetica-Bold';
 const ITALIC = HAS_FONTS ? 'Sans-Italic' : 'Helvetica-Oblique';
 
+// CJK coverage (Noto Sans CJK JP — also covers Latin/Han) for Japanese/Chinese/
+// Korean release names; the Latin Noto fonts render those as tofu boxes.
+const CJK_FONT = loadFont('NotoSansJP-Regular.otf');
+const HAS_CJK = Boolean(CJK_FONT);
+const CJK_RE = /[ᄀ-ᇿ⺀-鿿ꥠ-꥿가-퟿豈-﫿　-ヿ㄰-㆏＀-￯]/;
+
 function registerFonts(doc: PDFDocument): void {
-  if (!HAS_FONTS) return;
-  doc.registerFont('Sans', FONTS.regular!);
-  doc.registerFont('Sans-Bold', FONTS.bold!);
-  doc.registerFont('Sans-Italic', FONTS.italic!);
+  if (HAS_FONTS) {
+    doc.registerFont('Sans', FONTS.regular!);
+    doc.registerFont('Sans-Bold', FONTS.bold!);
+    doc.registerFont('Sans-Italic', FONTS.italic!);
+  }
+  if (HAS_CJK) doc.registerFont('CJK', CJK_FONT!);
+}
+
+type Weight = 'r' | 'b' | 'i';
+
+/** Select the right font for a string — the CJK font when it contains CJK
+ * characters (which the Latin fonts lack), otherwise the weighted Latin font. */
+function useFont(doc: PDFDocument, text: string, weight: Weight): void {
+  if (HAS_CJK && CJK_RE.test(text)) doc.font('CJK');
+  else doc.font(weight === 'b' ? BOLD : weight === 'i' ? ITALIC : REG);
+}
+
+/** Truncate to a single line that fits maxWidth (with an ellipsis). pdfkit's own
+ * `ellipsis` wraps across the page when no height is set, so we measure here. The
+ * caller must set the font + size first (widthOfString uses the current font). */
+function clip(doc: PDFDocument, text: string, maxWidth: number): string {
+  if (!text) return '';
+  if (doc.widthOfString(text) <= maxWidth) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (doc.widthOfString(text.slice(0, mid) + '…') <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, lo).replace(/\s+$/, '') + '…';
 }
 
 export interface AppraisalItem {
@@ -113,8 +146,8 @@ export function buildAppraisalPdf(stream: NodeJS.WritableStream, data: Appraisal
   doc.fillColor(INK).font(BOLD).fontSize(26).text('Collection Appraisal', left, doc.y);
   doc.moveDown(0.3);
   // Owner identity: real name (if Discogs exposes it) then username · date, then email.
-  const idLine = [data.name, data.owner].filter(Boolean).join('  ·  ');
-  doc.font(REG).fontSize(11).fillColor(DIM).text(`${idLine}  ·  ${fmtDate(data.generatedAt)}`);
+  const idLine = `${[data.name, data.owner].filter(Boolean).join('  ·  ')}  ·  ${fmtDate(data.generatedAt)}`;
+  useFont(doc, idLine, 'r'); doc.fontSize(11).fillColor(DIM).text(idLine, left, doc.y);
   if (data.email) {
     doc.font(REG).fontSize(10).fillColor(FAINT).text(data.email);
   }
@@ -219,24 +252,28 @@ function drawRow(doc: PDFDocument, left: number, right: number, y: number, it: A
       .text('Paid ' + money(it.purchasePrice), valX, y + 18, { width: 130, align: 'right', lineBreak: false });
   }
 
-  // Left: title / artist · year / label · format · condition
-  doc.font(BOLD).fontSize(12).fillColor(INK)
-    .text(it.title || 'Untitled', textLeft, y, { width: textW, lineBreak: false, ellipsis: true });
+  // Left: title / artist · year / label · format · condition. Each line is
+  // truncated to a single line (clip) so rows never overflow the divider.
+  const title = it.title || 'Untitled';
+  useFont(doc, title, 'b'); doc.fontSize(12).fillColor(INK);
+  doc.text(clip(doc, title, textW), textLeft, y, { lineBreak: false });
+
   const sub = [it.artist, it.year ? String(it.year) : ''].filter(Boolean).join('  ·  ');
-  doc.font(REG).fontSize(9).fillColor(DIM)
-    .text(sub, textLeft, y + 15, { width: textW, lineBreak: false, ellipsis: true });
+  useFont(doc, sub, 'r'); doc.fontSize(9).fillColor(DIM);
+  doc.text(clip(doc, sub, textW), textLeft, y + 15, { lineBreak: false });
+
   const meta = [
     [it.label, it.catno].filter(Boolean).join(' '),
     it.format,
     `Media: ${it.media} / Sleeve: ${it.sleeve}`,
   ].filter((s) => s && s.trim()).join('   ·   ');
-  doc.font(REG).fontSize(9).fillColor(FAINT)
-    .text(meta, textLeft, y + 28, { width: textW, lineBreak: false, ellipsis: true });
+  useFont(doc, meta, 'r'); doc.fontSize(9).fillColor(FAINT);
+  doc.text(clip(doc, meta, textW), textLeft, y + 28, { lineBreak: false });
 
   let ny = y + 44;
   if (it.note) {
-    doc.font(ITALIC).fontSize(8.5).fillColor(DIM)
-      .text(it.note, textLeft, ny, { width: textW, lineBreak: false, ellipsis: true });
+    useFont(doc, it.note, 'i'); doc.fontSize(8.5).fillColor(DIM);
+    doc.text(clip(doc, it.note, textW), textLeft, ny, { lineBreak: false });
     ny += 12;
   }
   // Keep rows at least as tall as the thumbnail.
