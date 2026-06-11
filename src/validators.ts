@@ -30,6 +30,11 @@ export const usernameReleaseParams = z.object({ username, releaseId });
 export const releaseParams = z.object({ id: releaseId });
 export const releaseQuery = z.object({ list: listKind.optional().default('catalog') });
 
+// ── image proxy ──────────────────────────────────────────────────────────────
+// Same-origin proxy for Discogs cover art so the web app can draw it onto a
+// <canvas> (i.discogs.com sends no CORS headers, which would taint the canvas).
+export const imageProxyQuery = z.object({ url: z.string().url() });
+
 // ── search ───────────────────────────────────────────────────────────────────
 export const searchQuery = z.object({
   q: z.string().trim().min(1),
@@ -146,3 +151,4 @@ export type UsernameReleaseParams = z.infer<typeof usernameReleaseParams>;
 export type ReleaseParams = z.infer<typeof releaseParams>;
 export type ReleaseQuery = z.infer<typeof releaseQuery>;
 export type SearchQuery = z.infer<typeof searchQuery>;
+export type ImageProxyQuery = z.infer<typeof imageProxyQuery>;

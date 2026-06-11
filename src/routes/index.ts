@@ -5,6 +5,7 @@ import { getItemMeta, setItemMeta, deleteItemMeta } from '../handlers/itemMetaHa
 import { exportAppraisal } from '../handlers/exportHandler';
 import { createUploadUrl, confirmUpload, listPhotos, getPhotoUrl, deletePhoto } from '../handlers/photoHandler';
 import { getRelease } from '../handlers/releaseHandler';
+import { proxyImage } from '../handlers/imageProxyHandler';
 import { search } from '../handlers/searchHandler';
 import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from '../handlers/wantlistHandler';
 import { requireAuth } from '../middleware/authMiddleware';
@@ -19,6 +20,7 @@ import {
   usernameReleaseParams,
   releaseParams,
   releaseQuery,
+  imageProxyQuery,
   searchQuery,
   preferencesBody,
   conditionBody,
@@ -68,6 +70,10 @@ router.post('/wantlist/:username/:releaseId/move', requireAuth, validate({ param
 
 // Release detail — no auth required (uses app-level credentials)
 router.get('/release/:id', validate({ params: releaseParams, query: releaseQuery }), getRelease);
+
+// Image proxy — same-origin Discogs cover art so the web app can draw covers
+// onto a <canvas> for share cards (public; Discogs' CDN sends no CORS headers).
+router.get('/images/proxy', validate({ query: imageProxyQuery }), proxyImage);
 
 // Search
 router.get('/search', requireAuth, validate({ query: searchQuery }), search);
