@@ -407,6 +407,12 @@ describe('photos (custom item images)', () => {
       id: 'aaaaaaaaaaaaaaaaaaaaaaaa', userId: 'user-1', status: 'pending',
       storageKey: 'users/user-1/photos/x.jpg', thumbKey: 'users/user-1/photos/x_thumb.jpg',
       save: vi.fn().mockResolvedValue(undefined), deleteOne: vi.fn(),
+      toObject() {
+        return {
+          _id: this.id, userId: this.userId, status: this.status,
+          storageKey: this.storageKey, thumbKey: this.thumbKey,
+        };
+      },
     };
     mocks.Photo.findById.mockResolvedValue(doc);
     const res = await authedMutate('post', '/api/v1/photos/aaaaaaaaaaaaaaaaaaaaaaaa/confirm');
@@ -414,6 +420,11 @@ describe('photos (custom item images)', () => {
     expect(mocks.image.processImage).toHaveBeenCalled();
     expect(mocks.storage.putObject).toHaveBeenCalledTimes(2); // full + thumb
     expect(doc.status).toBe('ready');
+    // confirm must return signed url/thumbUrl so the iOS PhotoDTO decode succeeds
+    expect(res.body).toMatchObject({
+      url: expect.stringContaining('http'),
+      thumbUrl: expect.stringContaining('http'),
+    });
   });
 
   it('confirm rejects a non-image (bad magic bytes) → 422 and cleans up', async () => {
