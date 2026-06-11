@@ -19,6 +19,7 @@ const collectionItemMetaSchema = new Schema<ICollectionItemMeta>(
     purchasePrice: { type: moneySchema, default: undefined },
     purchaseDate: { type: Date },
     note: { type: String, trim: true },
+    personalRating: { type: Number, min: 0, max: 5 },
   },
   { timestamps: true },
 );

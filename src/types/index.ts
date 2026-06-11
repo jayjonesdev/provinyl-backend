@@ -62,6 +62,8 @@ export interface ICollectionItemMeta extends Document {
   purchasePrice?: IMoney;
   purchaseDate?: Date;
   note?: string;
+  /** Owner's personal 1–5 star rating; 0/absent = unrated. */
+  personalRating?: number;
   createdAt: Date;
   updatedAt: Date;
 }

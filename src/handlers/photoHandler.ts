@@ -25,6 +25,18 @@ function ensureStorage(res: Response): boolean {
   return false;
 }
 
+// Attach short-lived presigned read URLs so the client always gets a `url`
+// (and `thumbUrl`) — the storage keys alone aren't publicly reachable.
+async function serializePhoto<T extends { storageKey: string; thumbKey?: string | null }>(
+  p: T,
+): Promise<T & { url: string; thumbUrl: string | null }> {
+  return {
+    ...p,
+    url: await presignGet(p.storageKey, GET_TTL),
+    thumbUrl: p.thumbKey ? await presignGet(p.thumbKey, GET_TTL) : null,
+  };
+}
+
 // POST /api/v1/photos/upload-url → { photoId, uploadUrl }
 // Mints a short-lived presigned PUT and a pending Photo row. The client PUTs the
 // image bytes directly to the bucket, then calls /confirm.
@@ -80,7 +92,7 @@ export async function confirmUpload(req: AuthRequest, res: Response): Promise<vo
       return;
     }
     if (photo.status === 'ready') {
-      res.json(photo);
+      res.json(await serializePhoto(photo.toObject()));
       return;
     }
 
@@ -105,7 +117,7 @@ export async function confirmUpload(req: AuthRequest, res: Response): Promise<vo
     photo.height = processed.height;
     photo.status = 'ready';
     await photo.save();
-    res.json(photo);
+    res.json(await serializePhoto(photo.toObject()));
   } catch (err) {
     logger.error({ err }, 'Failed to confirm upload');
     fail(res, 502, 'storage_error', 'Failed to process the image');
@@ -120,13 +132,7 @@ export async function listPhotos(req: AuthRequest, res: Response): Promise<void>
     const photos = await Photo.find({ userId: req.userId!, releaseId, status: 'ready' })
       .sort({ createdAt: 1 })
       .lean();
-    const withUrls = await Promise.all(
-      photos.map(async (p) => ({
-        ...p,
-        url: await presignGet(p.storageKey, GET_TTL),
-        thumbUrl: p.thumbKey ? await presignGet(p.thumbKey, GET_TTL) : null,
-      })),
-    );
+    const withUrls = await Promise.all(photos.map((p) => serializePhoto(p)));
     res.json(withUrls);
   } catch (err) {
     logger.error({ err }, 'Failed to list photos');

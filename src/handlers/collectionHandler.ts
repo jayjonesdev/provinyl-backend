@@ -17,14 +17,20 @@ async function applyItemMeta(userId: string, releases: Release[]): Promise<void>
     userId,
     releaseId: { $in: releases.map((r) => r.id) },
   })
-    .select('releaseId value')
+    .select('releaseId value personalRating')
     .lean();
   if (metas.length === 0) return;
   const valueByRelease = new Map<number, number>();
-  for (const m of metas) if (m.value) valueByRelease.set(m.releaseId, m.value.amount);
+  const ratingByRelease = new Map<number, number>();
+  for (const m of metas) {
+    if (m.value) valueByRelease.set(m.releaseId, m.value.amount);
+    if (m.personalRating) ratingByRelease.set(m.releaseId, m.personalRating);
+  }
   for (const r of releases) {
     const v = valueByRelease.get(r.id);
     if (v !== undefined) r.value = v;
+    const pr = ratingByRelease.get(r.id);
+    if (pr !== undefined) r.personalRating = pr;
   }
 }
 

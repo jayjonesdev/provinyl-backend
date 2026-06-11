@@ -79,6 +79,8 @@ export const itemMetaBody = z
     purchasePrice: money.optional(),
     purchaseDate: z.coerce.date().optional(),
     note: z.string().max(280).optional(),
+    // Owner's personal rating: 1–5 stars, or 0 to clear it.
+    personalRating: z.coerce.number().int().min(0).max(5).optional(),
     // Which owned copy this applies to; release-level when omitted.
     instanceId: z.coerce.number().int().positive().optional(),
   })
@@ -88,8 +90,9 @@ export const itemMetaBody = z
       b.value !== undefined ||
       b.purchasePrice !== undefined ||
       b.purchaseDate !== undefined ||
-      b.note !== undefined,
-    { message: 'Provide at least one of value, purchasePrice, purchaseDate, note' },
+      b.note !== undefined ||
+      b.personalRating !== undefined,
+    { message: 'Provide at least one of value, purchasePrice, purchaseDate, note, personalRating' },
   );
 
 // ── photos (custom item images) ───────────────────────────────────────────────

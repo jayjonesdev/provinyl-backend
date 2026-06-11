@@ -93,6 +93,8 @@ export interface Release {
   // owner fields
   value: number;
   condition: Condition;
+  /** Owner's personal 1–5 star rating; 0 = unrated. */
+  personalRating: number;
   /** ISO date (YYYY-MM-DD); "" when not applicable. */
   dateAdded: string;
   list: ListKind;

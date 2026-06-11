@@ -9,6 +9,9 @@ const envSchema = z.object({
   // pino level; defaults to info in production, debug otherwise (see logger.ts).
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).optional(),
   MONGO_URI: z.string().min(1, 'MONGO_URI is required'),
+  // Database name to use. Set explicitly so we don't fall back to Mongo's
+  // default "test" db when the URI has no path segment (e.g. .../?appName=…).
+  MONGO_DB: z.string().min(1).default('provinyl'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('30d'),

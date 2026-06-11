@@ -22,8 +22,8 @@ process.on('unhandledRejection', (reason) => {
 
 async function start() {
   try {
-    await mongoose.connect(env.MONGO_URI);
-    logger.info('MongoDB connected');
+    await mongoose.connect(env.MONGO_URI, { dbName: env.MONGO_DB });
+    logger.info({ db: env.MONGO_DB }, 'MongoDB connected');
 
     app.listen(env.PORT, () => {
       logger.info(`provinyl-backend running on port ${env.PORT} [${env.NODE_ENV}]`);
