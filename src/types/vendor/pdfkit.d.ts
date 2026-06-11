@@ -30,6 +30,7 @@ declare module 'pdfkit' {
     lineWidth(width: number): this;
     text(text: string, x: number, y: number, options?: TextOptions): this;
     text(text: string, options?: TextOptions): this;
+    widthOfString(text: string, options?: TextOptions): number;
     image(src: Buffer | string, x: number, y: number, options?: TextOptions): this;
     moveDown(lines?: number): this;
     moveTo(x: number, y: number): this;
