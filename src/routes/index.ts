@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { login, callback, me, refresh, logout, updatePreferences } from '../handlers/authHandler';
-import { getCollection, addToCollection, removeFromCollection, getCollectionValue, setCondition } from '../handlers/collectionHandler';
+import { getCollection, getPublicCollection, addToCollection, removeFromCollection, getCollectionValue, setCondition } from '../handlers/collectionHandler';
 import { getItemMeta, setItemMeta, deleteItemMeta } from '../handlers/itemMetaHandler';
 import { exportAppraisal } from '../handlers/exportHandler';
 import { createUploadUrl, confirmUpload, listPhotos, getPhotoUrl, deletePhoto } from '../handlers/photoHandler';
@@ -50,6 +50,9 @@ router.get('/auth/me', requireAuth, me);
 router.post('/auth/me/preferences', requireAuth, validate({ body: preferencesBody }), updatePreferences);
 router.post('/auth/refresh', refresh);
 router.post('/auth/logout', logout);
+
+// Public collection — read-only, no auth (powers /u/:username in the SPA).
+router.get('/public/:username/collection', validate({ params: usernameParams }), getPublicCollection);
 
 // Collection
 router.get('/collection/:username', requireAuth, validate({ params: usernameParams }), getCollection);

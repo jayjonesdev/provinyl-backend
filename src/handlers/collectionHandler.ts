@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthRequest } from '../types';
 import { createUserClientFor, createAppClient } from '../services/discogsService';
 import { collectionItemToRelease, gradeFieldIdsFrom, releaseToRelease } from '../utils/toRelease';
@@ -65,6 +65,20 @@ export async function getCollection(req: AuthRequest, res: Response): Promise<vo
 }
 
 // POST /api/v1/collection/:username/:releaseId/condition  body: { media?, sleeve?, instanceId? }
+// GET /api/v1/public/:username/collection → public Release[] (no auth, read-only).
+// Powers the in-app public collection page (provinyl-web /u/:username). Owner
+// grades/value are not exposed; mutations stay owner-only on the authed routes.
+export async function getPublicCollection(req: Request, res: Response): Promise<void> {
+  try {
+    const username = String(req.params.username);
+    const releases = await createAppClient().getAllPublicCollection(username);
+    res.json(releases.map((r) => collectionItemToRelease(r)));
+  } catch (err) {
+    logger.warn({ err }, 'Public collection fetch failed (private or unknown user)');
+    fail(res, 404, 'not_found', 'Public collection not found');
+  }
+}
+
 // Sets Media/Sleeve grading on an owned copy via Discogs collection custom fields.
 export async function setCondition(req: AuthRequest, res: Response): Promise<void> {
   try {
