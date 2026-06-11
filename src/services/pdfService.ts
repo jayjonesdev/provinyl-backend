@@ -24,6 +24,7 @@ export interface AppraisalItem {
   value: number;
   purchasePrice?: number;
   note?: string;
+  image?: Buffer;
 }
 
 export interface AppraisalData {
@@ -138,7 +139,19 @@ function drawStat(doc: PDFDocument, x: number, y: number, w: number, label: stri
 
 function drawRow(doc: PDFDocument, left: number, right: number, y: number, it: AppraisalItem): number {
   const valX = right - 130;
-  const textW = valX - left - 12;
+
+  // Optional thumbnail on the far left; text shifts right to make room.
+  let textLeft = left;
+  const imgSize = 40;
+  if (it.image) {
+    try {
+      doc.image(it.image, left, y, { fit: [imgSize, imgSize] });
+      textLeft = left + imgSize + 12;
+    } catch {
+      // Unreadable image — skip it rather than abort the whole document.
+    }
+  }
+  const textW = valX - textLeft - 12;
 
   // Right: stated value + paid
   doc.font('Helvetica-Bold').fontSize(14).fillColor(it.value > 0 ? INK : '#b8b8c0')
@@ -150,24 +163,26 @@ function drawRow(doc: PDFDocument, left: number, right: number, y: number, it: A
 
   // Left: title / artist · year / label · format · condition
   doc.font('Helvetica-Bold').fontSize(12).fillColor(INK)
-    .text(it.title || 'Untitled', left, y, { width: textW, lineBreak: false, ellipsis: true });
+    .text(it.title || 'Untitled', textLeft, y, { width: textW, lineBreak: false, ellipsis: true });
   const sub = [it.artist, it.year ? String(it.year) : ''].filter(Boolean).join('  ·  ');
   doc.font('Helvetica').fontSize(9).fillColor(DIM)
-    .text(sub, left, y + 15, { width: textW, lineBreak: false, ellipsis: true });
+    .text(sub, textLeft, y + 15, { width: textW, lineBreak: false, ellipsis: true });
   const meta = [
     [it.label, it.catno].filter(Boolean).join(' '),
     it.format,
     `M:${it.media} / S:${it.sleeve}`,
   ].filter((s) => s && s.trim()).join('   ·   ');
   doc.font('Helvetica').fontSize(9).fillColor(FAINT)
-    .text(meta, left, y + 28, { width: textW, lineBreak: false, ellipsis: true });
+    .text(meta, textLeft, y + 28, { width: textW, lineBreak: false, ellipsis: true });
 
   let ny = y + 44;
   if (it.note) {
     doc.font('Helvetica-Oblique').fontSize(8.5).fillColor(DIM)
-      .text(it.note, left, ny, { width: textW, lineBreak: false, ellipsis: true });
+      .text(it.note, textLeft, ny, { width: textW, lineBreak: false, ellipsis: true });
     ny += 12;
   }
+  // Keep rows at least as tall as the thumbnail.
+  if (it.image) ny = Math.max(ny, y + imgSize);
   doc.moveTo(left, ny + 2).lineTo(right, ny + 2).strokeColor(LINE).lineWidth(0.5).stroke();
   return ny + 10;
 }

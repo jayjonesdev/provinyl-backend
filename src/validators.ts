@@ -110,6 +110,8 @@ export const exportQuery = z.object({
     .regex(/^(all|over:\d+(\.\d+)?)$/, 'scope must be "all" or "over:<amount>"')
     .optional()
     .default('all'),
+  // '1' embeds each item's primary photo thumbnail.
+  images: z.enum(['0', '1']).optional().default('0'),
 });
 
 // ── preferences ──────────────────────────────────────────────────────────────

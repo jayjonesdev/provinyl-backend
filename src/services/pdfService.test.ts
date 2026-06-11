@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Writable } from 'node:stream';
+import sharp from 'sharp';
 import { buildAppraisalPdf, AppraisalItem } from './pdfService';
 
 /** Collect a PDF stream into a single Buffer. */
@@ -53,5 +54,17 @@ describe('buildAppraisalPdf', () => {
     const buf = await render(many);
     expect(buf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     expect(buf.length).toBeGreaterThan(5000);
+  });
+
+  it('embeds an item thumbnail when provided', async () => {
+    const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#5f5c74' } }).png().toBuffer();
+    const buf = await render([item({ image: png })]);
+    expect(buf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(buf.subarray(-1024).toString('latin1')).toContain('%%EOF');
+  });
+
+  it('survives an unreadable image buffer (no crash)', async () => {
+    const buf = await render([item({ image: Buffer.from('not an image') })]);
+    expect(buf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 });

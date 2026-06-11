@@ -345,6 +345,22 @@ describe('export (appraisal PDF)', () => {
     expect(res.body.error.code).toBe('validation_error');
   });
 
+  it('GET ?images=1 embeds thumbnails and still streams a PDF', async () => {
+    mocks.userClient.getAllCollection.mockResolvedValue([collectionItem]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mocks.Photo.find.mockReturnValue({ sort: () => ({ lean: () => Promise.resolve([
+      { releaseId: 305571, thumbKey: 'users/user-1/photos/x_thumb.jpg' },
+    ]) }) } as any);
+    const res = await authedGet('/api/v1/export/appraisal.pdf?images=1').buffer().parse((r, cb) => {
+      const chunks: Buffer[] = [];
+      r.on('data', (c: Buffer) => chunks.push(c));
+      r.on('end', () => cb(null, Buffer.concat(chunks)));
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.storage.getObject).toHaveBeenCalledWith('users/user-1/photos/x_thumb.jpg');
+    expect((res.body as Buffer).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+
   it('requires auth → 401', async () => {
     const res = await request(app).get('/api/v1/export/appraisal.pdf');
     expect(res.status).toBe(401);
