@@ -48,9 +48,11 @@ export async function exportAppraisal(req: AuthRequest, res: Response): Promise<
     const { scope, images } = req.valid!.query as ExportQuery;
 
     const client = createUserClientFor(user);
-    const [raw, fields] = await Promise.all([
+    const [raw, fields, profile] = await Promise.all([
       client.getAllCollection(username),
       client.getCollectionFields(username).catch(() => ({ fields: [] })),
+      // Real name / email for the cover — non-fatal (Discogs may omit them).
+      client.getProfile(username).catch(() => null),
     ]);
     const ids = gradeFieldIdsFrom(fields.fields);
     const releases = raw.map((r) => collectionItemToRelease(r, ids));
@@ -99,7 +101,13 @@ export async function exportAppraisal(req: AuthRequest, res: Response): Promise<
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    buildAppraisalPdf(res, { owner: username, generatedAt: new Date(), items });
+    buildAppraisalPdf(res, {
+      owner: username,
+      name: profile?.name?.trim() || undefined,
+      email: profile?.email?.trim() || undefined,
+      generatedAt: new Date(),
+      items,
+    });
   } catch (err) {
     logger.error({ err }, 'Failed to generate appraisal PDF');
     // If streaming already started, headers are sent — can't switch to JSON.

@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     getCollectionValue: vi.fn(),
     getCollectionFields: vi.fn(),
     setInstanceField: vi.fn(),
+    getProfile: vi.fn(),
   },
   appClient: { getAllPublicCollection: vi.fn(), getRelease: vi.fn(), searchDatabase: vi.fn() },
   User: { findById: vi.fn(), findOneAndUpdate: vi.fn() },
@@ -132,6 +133,7 @@ beforeEach(() => {
   mocks.User.findById.mockResolvedValue(fakeUser);
   // Default: no custom grade fields (most tests don't care); overridden where needed.
   mocks.userClient.getCollectionFields.mockResolvedValue({ fields: [] });
+  mocks.userClient.getProfile.mockResolvedValue({ id: 1, username: 'me', avatar_url: '', resource_url: '' });
   // Default: no per-item meta. Self-referential chain supports both
   // find(...).lean() and find(...).select(...).lean().
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

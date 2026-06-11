@@ -189,6 +189,10 @@ export interface DiscogsProfile {
   username: string;
   avatar_url: string;
   resource_url: string;
+  // Present when requesting your own profile (authenticated): real name and the
+  // account email. Both optional — Discogs omits them for other users.
+  name?: string;
+  email?: string;
 }
 
 /** A single owned copy of a release in the user's collection. */

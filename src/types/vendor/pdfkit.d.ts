@@ -21,7 +21,9 @@ declare module 'pdfkit' {
     y: number;
 
     pipe(dest: NodeJS.WritableStream): NodeJS.WritableStream;
+    registerFont(name: string, src: string | Buffer): this;
     font(name: string): this;
+    circle(x: number, y: number, radius: number): this;
     fontSize(size: number): this;
     fillColor(color: string): this;
     strokeColor(color: string): this;
