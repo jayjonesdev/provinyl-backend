@@ -8,7 +8,6 @@ import { pinoHttp } from 'pino-http';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import logger from './utils/logger';
-import { VERSION } from './version';
 import router from './routes';
 import publicRouter from './routes/public';
 import { csrfMiddleware } from './middleware/csrfMiddleware';
@@ -29,12 +28,6 @@ export function createApp(): Express {
 
   // Structured request logging (bound to the app's pino logger)
   app.use(pinoHttp({ logger }));
-
-  // Liveness probe — root-level, no cookies/CSRF. (Also exposed at
-  // /api/v1/health, which is the configured Render health check.)
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', version: VERSION, uptime: process.uptime(), timestamp: Date.now() });
-  });
 
   // Public share surfaces (/u/:username, /card/:username.png) — mounted before
   // the cookie/CSRF layer so these cacheable, crawler-facing responses carry no
