@@ -14,10 +14,12 @@ const FAINT = '#9a9aa4';
 const LINE = '#e3e2e8';
 const CARD = '#f6f6f9';
 
+const ASSET_DIR = path.join(__dirname, '../assets');
+
 // Embedded Unicode fonts (Noto Sans) — pdfkit's built-in Helvetica is WinAnsi
 // only, so non-Latin release names render as garbage. Falls back to Helvetica
 // if the font files aren't present at runtime. (Copied to dist/assets by build.)
-const FONT_DIR = path.join(__dirname, '../assets/fonts');
+const FONT_DIR = path.join(ASSET_DIR, 'fonts');
 function loadFont(file: string): Buffer | null {
   try {
     return fs.readFileSync(path.join(FONT_DIR, file));
@@ -40,6 +42,18 @@ const ITALIC = HAS_FONTS ? 'Sans-Italic' : 'Helvetica-Oblique';
 const CJK_FONT = loadFont('NotoSansJP-Regular.otf');
 const HAS_CJK = Boolean(CJK_FONT);
 const CJK_RE = /[ᄀ-ᇿ⺀-鿿ꥠ-꥿가-퟿豈-﫿　-ヿ㄰-㆏＀-￯]/;
+
+// Official ProVinyl logo mark (white on transparent) — the same asset the share
+// cards use. Embedded on the cover in place of the old hand-drawn vinyl disc.
+// Falls back to the drawn mark if the file isn't present at runtime.
+const LOGO_MARK = (() => {
+  try {
+    return fs.readFileSync(path.join(ASSET_DIR, 'logo-mark-white.png'));
+  } catch {
+    return null;
+  }
+})();
+const LOGO_ASPECT = 404 / 464; // intrinsic width / height of logo-mark-white.png
 
 function registerFonts(doc: PDFDocument): void {
   if (HAS_FONTS) {
@@ -107,6 +121,24 @@ function drawVinyl(doc: PDFDocument, cx: number, cy: number, r: number): void {
   doc.restore();
 }
 
+/** Cover brand mark: the official (white) ProVinyl logo centred on a dark disc
+ * so it stays legible on the light page. Falls back to the drawn vinyl mark if
+ * the logo asset is missing. `size` is the badge diameter; (x, y) its top-left. */
+function drawBrandMark(doc: PDFDocument, x: number, y: number, size: number): void {
+  const r = size / 2;
+  if (!LOGO_MARK) {
+    drawVinyl(doc, x + r, y + r, r);
+    return;
+  }
+  doc.save();
+  doc.circle(x + r, y + r, r).fillColor(INK).fill();
+  // Fit the white mark inside the disc with padding, preserving its aspect.
+  const h = size * 0.52;
+  const w = h * LOGO_ASPECT;
+  doc.image(LOGO_MARK, x + (size - w) / 2, y + (size - h) / 2, { width: w, height: h });
+  doc.restore();
+}
+
 function money(n: number): string {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
 }
@@ -135,11 +167,12 @@ export function buildAppraisalPdf(stream: NodeJS.WritableStream, data: Appraisal
   const withValue = data.items.filter((i) => i.value > 0).length;
 
   // ===== Cover / summary =====
-  // Vinyl mark + "pro·vinyl" wordmark.
-  const markR = 11;
-  drawVinyl(doc, left + markR, 64 + markR, markR);
+  // Official logo mark + "pro·vinyl" wordmark.
+  const markSize = 26;
+  drawBrandMark(doc, left, 64, markSize);
   doc.font(BOLD).fontSize(22);
-  doc.fillColor(INK).text('pro', left + markR * 2 + 10, 64, { continued: true });
+  // Nudge the wordmark down so its cap height centres against the badge.
+  doc.fillColor(INK).text('pro', left + markSize + 10, 64 + (markSize - 22) / 2, { continued: true });
   doc.fillColor(ACCENT).text('vinyl');
 
   doc.moveDown(1.1);
