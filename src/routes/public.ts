@@ -5,11 +5,15 @@
 
 import { Router } from 'express';
 import { getCard, getProfilePage } from '../handlers/publicHandler';
+import { publicLimiter } from '../middleware/rateLimitMiddleware';
 
 const publicRouter: Router = Router();
 
+// publicLimiter is attached per-route (not via router.use) so it only counts
+// requests that actually match a public share surface — this router is mounted
+// at `/`, so a router-level .use() would throttle every app request too.
 // `:username` captures the trailing `.png` (e.g. "jonesy.png"); the handler strips it.
-publicRouter.get('/card/:username', getCard);
-publicRouter.get('/u/:username', getProfilePage);
+publicRouter.get('/card/:username', publicLimiter, getCard);
+publicRouter.get('/u/:username', publicLimiter, getProfilePage);
 
 export default publicRouter;

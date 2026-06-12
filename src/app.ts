@@ -12,7 +12,7 @@ import router from './routes';
 import publicRouter from './routes/public';
 import { csrfMiddleware } from './middleware/csrfMiddleware';
 import { errorMiddleware, notFoundMiddleware } from './middleware/errorMiddleware';
-import { apiLimiter, publicLimiter } from './middleware/rateLimitMiddleware';
+import { apiLimiter } from './middleware/rateLimitMiddleware';
 
 export function createApp(): Express {
   const app = express();
@@ -32,8 +32,11 @@ export function createApp(): Express {
   // Public share surfaces (/u/:username, /card/:username.png) — mounted before
   // the cookie/CSRF layer so these cacheable, crawler-facing responses carry no
   // Set-Cookie. Read-only; mutations remain owner-only under /api/v1.
-  // publicLimiter throttles these unauthenticated, scrapeable endpoints.
-  app.use('/', publicLimiter, publicRouter);
+  // publicLimiter is applied per-route inside publicRouter (NOT here): a
+  // standalone limiter in this `app.use('/', …)` chain would run for *every*
+  // request to the app (every path matches `/`), throttling the whole surface —
+  // including /api/v1/health — under the tight public cap.
+  app.use('/', publicRouter);
 
   // Cookies + body parsing
   app.use(cookieParser());

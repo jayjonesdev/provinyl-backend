@@ -58,7 +58,17 @@ export function createRateLimiter({ windowMs, limit, name, skip }: LimiterConfig
 // Baseline net over the whole authenticated app surface. Generous on purpose:
 // one share-card render fans out many /images/proxy calls (one per cover), so a
 // tight cap here would break legitimate large-collection views.
-export const apiLimiter = createRateLimiter({ name: 'api', windowMs: 15 * MINUTE, limit: 3000 });
+//
+// Health probes are exempt: Render's load balancer polls /api/v1/health on a
+// short interval, and behind the edge proxy all probes can share one client IP,
+// so counting them would let infra traffic erode the budget for real clients.
+// (req.url is stripped of the /api/v1 mount prefix here, so match on '/health'.)
+export const apiLimiter = createRateLimiter({
+  name: 'api',
+  windowMs: 15 * MINUTE,
+  limit: 3000,
+  skip: (req) => skipInTest() || req.path === '/health',
+});
 
 // Unauthenticated, crawler-facing surfaces (/u/:username, /card/:username.png,
 // /public/:username/collection). Low enough to stop bulk scraping of public

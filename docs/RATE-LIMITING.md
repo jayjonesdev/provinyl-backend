@@ -104,8 +104,10 @@ limiter name.
 
 ### Not throttled
 
-- `/health` (root) and `/api/v1/health` liveness/health-check probes — the root one
-  is mounted before any limiter; the API one sits under the generous `apiLimiter`.
+- `/api/v1/health` liveness/health-check probes — sit under the generous
+  `apiLimiter` (3000/15 min) only. `publicLimiter` is attached per-route inside
+  `routes/public.ts`, so it counts only real `/u/:username` and `/card/:username.png`
+  hits — not every app request.
 - The **test suite** — limiters `skip` when `NODE_ENV === 'test'` so supertest can
   hammer the app without the MemoryStore counter bleeding across cases. The limiter's
   own test passes an explicit non-skipping predicate to exercise the 429 path
