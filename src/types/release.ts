@@ -95,6 +95,8 @@ export interface Release {
   condition: Condition;
   /** Owner's personal 1–5 star rating; 0 = unrated. */
   personalRating: number;
+  /** Owner's free-text note about this copy; "" when none. */
+  personalNote: string;
   /** ISO date (YYYY-MM-DD); "" when not applicable. */
   dateAdded: string;
   list: ListKind;
