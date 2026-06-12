@@ -9,6 +9,7 @@ import { proxyImage } from '../handlers/imageProxyHandler';
 import { search } from '../handlers/searchHandler';
 import { getWantlist, addToWantlist, removeFromWantlist, moveToCollection } from '../handlers/wantlistHandler';
 import { requireAuth } from '../middleware/authMiddleware';
+import { authLimiter, publicLimiter } from '../middleware/rateLimitMiddleware';
 import { validate } from '../middleware/validate';
 import { ensureCsrfCookie } from '../auth/cookies';
 import { VERSION } from '../version';
@@ -43,16 +44,20 @@ router.get('/auth/csrf', (req: Request, res: Response) => {
   res.json({ csrfToken: ensureCsrfCookie(req, res) });
 });
 
-// Auth
-router.get('/auth/login', validate({ query: loginQuery }), login);
-router.get('/auth/callback', validate({ query: callbackQuery }), callback);
+// Auth — authLimiter guards the OAuth entry/return and token endpoints against
+// credential-stuffing / token churn. /auth/me(+preferences) stay on the baseline
+// apiLimiter since the SPA polls them during normal authenticated use.
+router.get('/auth/login', authLimiter, validate({ query: loginQuery }), login);
+router.get('/auth/callback', authLimiter, validate({ query: callbackQuery }), callback);
 router.get('/auth/me', requireAuth, me);
 router.post('/auth/me/preferences', requireAuth, validate({ body: preferencesBody }), updatePreferences);
-router.post('/auth/refresh', refresh);
-router.post('/auth/logout', logout);
+router.post('/auth/refresh', authLimiter, refresh);
+router.post('/auth/logout', authLimiter, logout);
 
 // Public collection — read-only, no auth (powers /u/:username in the SPA).
-router.get('/public/:username/collection', validate({ params: usernameParams }), getPublicCollection);
+// publicLimiter shares its counter with the root share surfaces, so a scraper's
+// page hits and API hits draw from one budget.
+router.get('/public/:username/collection', publicLimiter, validate({ params: usernameParams }), getPublicCollection);
 
 // Collection
 router.get('/collection/:username', requireAuth, validate({ params: usernameParams }), getCollection);

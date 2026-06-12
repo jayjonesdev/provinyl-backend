@@ -13,9 +13,15 @@ import router from './routes';
 import publicRouter from './routes/public';
 import { csrfMiddleware } from './middleware/csrfMiddleware';
 import { errorMiddleware, notFoundMiddleware } from './middleware/errorMiddleware';
+import { apiLimiter, publicLimiter } from './middleware/rateLimitMiddleware';
 
 export function createApp(): Express {
   const app = express();
+
+  // Behind Render's edge proxy: trust one hop so req.ip is the real client
+  // (from X-Forwarded-For), which the IP-keyed rate limiters depend on. A
+  // numeric hop count (not `true`) keeps the limiter's spoofing guard happy.
+  app.set('trust proxy', 1);
 
   // Security
   app.use(helmet());
@@ -33,7 +39,8 @@ export function createApp(): Express {
   // Public share surfaces (/u/:username, /card/:username.png) — mounted before
   // the cookie/CSRF layer so these cacheable, crawler-facing responses carry no
   // Set-Cookie. Read-only; mutations remain owner-only under /api/v1.
-  app.use('/', publicRouter);
+  // publicLimiter throttles these unauthenticated, scrapeable endpoints.
+  app.use('/', publicLimiter, publicRouter);
 
   // Cookies + body parsing
   app.use(cookieParser());
@@ -43,8 +50,9 @@ export function createApp(): Express {
   // CSRF (double-submit): issues the token on safe requests, enforces on mutations
   app.use(csrfMiddleware);
 
-  // Routes
-  app.use('/api/v1', router);
+  // Routes — apiLimiter is the baseline safety net over the whole API surface;
+  // auth + public sub-routes layer stricter limiters on top (see routes/index).
+  app.use('/api/v1', apiLimiter, router);
 
   // 404 + error handling
   app.use(notFoundMiddleware);
