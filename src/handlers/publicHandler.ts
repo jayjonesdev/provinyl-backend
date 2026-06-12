@@ -59,11 +59,7 @@ export async function getProfilePage(req: Request, res: Response): Promise<void>
   const username = String(req.params.username || '');
   const profile = await getPublicProfile(username).catch(() => null);
 
-  // og:image points at THIS host (wherever the backend is reached), so it
-  // resolves after the provinyl.io/u/* → backend redirect. og:url is canonical.
-  const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0] || req.protocol;
-  const self = `${proto}://${req.get('host')}`.replace(/\/$/, '');
-  const head = profile ? ogHead(profile, self) : notFoundHead(username);
+  const head = profile ? ogHead(profile) : notFoundHead(username);
 
   res.setHeader('Cache-Control', 'public, max-age=21600'); // 6h (Discogs freshness)
 
@@ -83,7 +79,7 @@ export async function getProfilePage(req: Request, res: Response): Promise<void>
     "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src https:; base-uri 'none'",
   );
   res.type('html').status(profile ? 200 : 404).send(
-    profile ? standalonePage(profile, self) : notFoundPage(username),
+    profile ? standalonePage(profile) : notFoundPage(username),
   );
 }
 
@@ -110,10 +106,12 @@ function injectHead(shell: string, head: string): string {
     .replace(/<\/head>/i, `${head}</head>`);
 }
 
-/** The per-user OG/Twitter <meta> block (shared by injection + the fallback). */
-function ogHead(profile: { username: string; count: number; topGenres: string[] }, self: string): string {
+/** The per-user OG/Twitter <meta> block (shared by injection + the fallback).
+ *  URLs are canonical to provinyl.io — /card/* is served there too (rewrite or
+ *  redirect to this backend), so the unfurl shows clean provinyl.io URLs. */
+function ogHead(profile: { username: string; count: number; topGenres: string[] }): string {
   const handle = '@' + esc(profile.username);
-  const cardUrl = `${self}/card/${encodeURIComponent(profile.username)}.png`;
+  const cardUrl = `${SITE}/card/${encodeURIComponent(profile.username)}.png`;
   const pageUrl = `${SITE}/u/${encodeURIComponent(profile.username)}`;
   const genres = profile.topGenres.length ? esc(profile.topGenres.join(' · ')) : 'vinyl';
   const title = `${handle}'s vinyl collection — ${profile.count.toLocaleString()} records · ProVinyl`;
@@ -161,9 +159,9 @@ ${head}
 </style></head><body><div class="wrap">${body}</div></body></html>`;
 }
 
-function standalonePage(profile: { username: string; count: number; topGenres: string[] }, self: string): string {
+function standalonePage(profile: { username: string; count: number; topGenres: string[] }): string {
   const handle = '@' + esc(profile.username);
-  const cardUrl = `${self}/card/${encodeURIComponent(profile.username)}.png`;
+  const cardUrl = `${SITE}/card/${encodeURIComponent(profile.username)}.png`;
   const genres = profile.topGenres.length ? esc(profile.topGenres.join(' · ')) : 'vinyl';
   const body = `
     <img class="card" src="${esc(cardUrl)}" alt="${handle}'s collection card" width="1200" height="630">
@@ -171,7 +169,7 @@ function standalonePage(profile: { username: string; count: number; topGenres: s
     <div class="sub">${profile.count.toLocaleString()} records · ${genres}</div>
     <a class="cta" href="${SITE}">Make your own collection page →</a>
     <div class="foot">Data provided by Discogs · <a class="plain" href="${SITE}">provinyl.io</a></div>`;
-  return shell(ogHead(profile, self), body);
+  return shell(ogHead(profile), body);
 }
 
 function notFoundPage(username: string): string {
